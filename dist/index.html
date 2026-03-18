@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echoes of Infinity</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0a1a;
+      color: #e0e0ff;
+      overflow: hidden;
+    }
+
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+      background: #0a0a1a;
+    }
+
+    /* ===== HUD TOP-LEFT ===== */
+    #hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 100;
+      font-size: 12px;
+    }
+
+    .hud-section {
+      margin-bottom: 15px;
+      background: rgba(20, 20, 50, 0.7);
+      padding: 10px;
+      border: 1px solid #6688cc;
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+      min-width: 150px;
+    }
+
+    .hud-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      align-items: center;
+    }
+
+    .hud-label {
+      color: #aabbdd;
+      flex: 1;
+    }
+
+    .hud-value {
+      color: #e0e0ff;
+      font-weight: bold;
+    }
+
+    .hp-bar, .stamina-bar, .resonance-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(40, 40, 80, 0.8);
+      border: 1px solid #6688cc;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+
+    .hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff4444, #ff8888);
+      transition: width 0.1s;
+    }
+
+    .stamina-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #44ff44, #88ff88);
+      transition: width 0.1s;
+    }
+
+    .resonance-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8844ff, #aa88ff);
+      transition: width 0.1s;
+    }
+
+    /* ===== GAUNTLET UI TOP-RIGHT ===== */
+    #gauntlet-ui {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      display: flex;
+      gap: 12px;
+    }
+
+    .stone-slot {
+      width: 50px;
+      height: 50px;
+      border: 2px solid #6688cc;
+      border-radius: 50%;
+      background: rgba(20, 20, 50, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(8px);
+    }
+
+    .stone-slot:hover {
+      background: rgba(40, 40, 80, 0.9);
+      border-color: #aa88ff;
+      box-shadow: 0 0 10px rgba(170, 136, 255, 0.5);
+    }
+
+    .stone-slot.empty {
+      opacity: 0.4;
+    }
+
+    /* ===== BUILD MODE INDICATOR ===== */
+    #build-mode-indicator {
+      position: fixed;
+      top: 20px;
+      right: 350px;
+      z-index: 100;
+      background: rgba(20, 20, 50, 0.7);
+      padding: 8px 12px;
+      border: 2px solid #ffaa44;
+      border-radius: 4px;
+      font-weight: bold;
+      display: none;
+      backdrop-filter: blur(8px);
+    }
+
+    #build-mode-indicator.active {
+      display: block;
+      animation: pulse 0.5s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { opacity: 1; }
+      to { opacity: 0.6; }
+    }
+
+    /* ===== HOTBAR BOTTOM-CENTER ===== */
+    #hotbar {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 8px;
+      background: rgba(20, 20, 50, 0.7);
+      padding: 10px;
+      border: 1px solid #6688cc;
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+    }
+
+    .hotbar-slot {
+      width: 40px;
+      height: 40px;
+      border: 1px solid #6688cc;
+      border-radius: 2px;
+      background: rgba(40, 40, 80, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 12px;
+      flex-direction: column;
+    }
+
+    .hotbar-slot:hover {
+      background: rgba(60, 60, 100, 0.8);
+      border-color: #aa88ff;
+    }
+
+    .hotbar-slot.active {
+      border-color: #ffaa44;
+      background: rgba(100, 80, 40, 0.8);
+      box-shadow: 0 0 8px rgba(255, 170, 68, 0.5);
+    }
+
+    .hotbar-icon {
+      font-size: 16px;
+    }
+
+    .hotbar-count {
+      font-size: 8px;
+      color: #aabbdd;
+    }
+
+    /* ===== CONTROLS HINT ===== */
+    #controls-hint {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      font-size: 11px;
+      color: #8899bb;
+      text-align: center;
+      background: rgba(20, 20, 50, 0.6);
+      padding: 8px 12px;
+      border: 1px solid #445566;
+      border-radius: 4px;
+      backdrop-filter: blur(8px);
+    }
+
+    /* ===== VERSION BADGE BOTTOM-LEFT ===== */
+    #version-badge {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 100;
+      font-size: 10px;
+      background: rgba(20, 20, 50, 0.7);
+      padding: 6px 10px;
+      border: 1px solid #6688cc;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(8px);
+    }
+
+    #version-badge:hover {
+      background: rgba(40, 40, 80, 0.9);
+      border-color: #aa88ff;
+    }
+
+    /* ===== MESSAGE AREA CENTER ===== */
+    #message-area {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 110;
+      text-align: center;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .message {
+      background: rgba(20, 20, 50, 0.9);
+      padding: 15px 25px;
+      border: 1px solid #6688cc;
+      border-radius: 4px;
+      animation: fadeInOut 3s;
+      backdrop-filter: blur(8px);
+    }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ===== MODAL OVERLAYS ===== */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: rgba(10, 10, 30, 0.95);
+      border: 2px solid #6688cc;
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 0 30px rgba(100, 136, 204, 0.3);
+    }
+
+    .modal-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #e0e0ff;
+      border-bottom: 1px solid #6688cc;
+      padding-bottom: 10px;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6688cc;
+      transition: color 0.2s;
+    }
+
+    .modal-close:hover {
+      color: #aa88ff;
+    }
+
+    /* ===== INVENTORY MODAL ===== */
+    #inventory-modal .modal-content {
+      width: 500px;
+    }
+
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .inventory-item {
+      background: rgba(40, 40, 80, 0.7);
+      border: 1px solid #6688cc;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 4px;
+    }
+
+    .inventory-item:hover {
+      background: rgba(60, 60, 100, 0.8);
+      border-color: #aa88ff;
+    }
+
+    .inventory-icon {
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+
+    .inventory-name {
+      font-size: 10px;
+      color: #aabbdd;
+      word-break: break-word;
+    }
+
+    .inventory-count {
+      font-size: 9px;
+      color: #8899bb;
+      margin-top: 3px;
+    }
+
+    /* ===== CRAFTING MODAL ===== */
+    #crafting-modal .modal-content {
+      width: 500px;
+    }
+
+    .recipe-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .recipe-item {
+      background: rgba(40, 40, 80, 0.7);
+      border: 1px solid #6688cc;
+      padding: 12px;
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .recipe-item:hover {
+      background: rgba(60, 60, 100, 0.8);
+      border-color: #aa88ff;
+    }
+
+    .recipe-item.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .recipe-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .recipe-icon {
+      font-size: 24px;
+    }
+
+    .recipe-info {
+      flex: 1;
+    }
+
+    .recipe-name {
+      font-weight: bold;
+      color: #e0e0ff;
+    }
+
+    .recipe-cost {
+      font-size: 10px;
+      color: #8899bb;
+      margin-top: 3px;
+    }
+
+    .recipe-button {
+      background: #6688cc;
+      border: 1px solid #aa88ff;
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .recipe-button:hover {
+      background: #7799dd;
+      border-color: #ffaa44;
+    }
+
+    .recipe-button:disabled {
+      background: #445566;
+      border-color: #6688cc;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    /* ===== GAUNTLET EQUIP MODAL ===== */
+    #gauntlet-modal .modal-content {
+      width: 500px;
+    }
+
+    .stone-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .stone-card {
+      background: rgba(40, 40, 80, 0.7);
+      border: 1px solid #6688cc;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 4px;
+    }
+
+    .stone-card:hover {
+      background: rgba(60, 60, 100, 0.8);
+      border-color: #aa88ff;
+    }
+
+    .stone-card.equipped {
+      border-color: #ffaa44;
+      background: rgba(100, 80, 40, 0.8);
+    }
+
+    .stone-emoji {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .stone-name {
+      font-weight: bold;
+      color: #e0e0ff;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .stone-description {
+      font-size: 10px;
+      color: #8899bb;
+      line-height: 1.3;
+    }
+
+    /* ===== LEDGER MODAL ===== */
+    #ledger-modal .modal-content {
+      width: 600px;
+    }
+
+    .ledger-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .stat-box {
+      background: rgba(40, 40, 80, 0.7);
+      border: 1px solid #6688cc;
+      padding: 12px;
+      border-radius: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #8899bb;
+      margin-bottom: 5px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+      color: #e0e0ff;
+    }
+
+    /* ===== MAP MODAL ===== */
+    #map-modal .modal-content {
+      width: 500px;
+      height: 500px;
+    }
+
+    #map-canvas {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ===== TURN BATTLE UI ===== */
+    #turn-battle-ui {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(10, 10, 30, 0.95);
+      border-top: 2px solid #ffaa44;
+      z-index: 150;
+      padding: 15px 20px;
+      display: none;
+      box-shadow: 0 -5px 20px rgba(255, 170, 68, 0.2);
+    }
+
+    #turn-battle-ui.active {
+      display: block;
+    }
+
+    .battle-info {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      gap: 40px;
+    }
+
+    .battle-side {
+      flex: 1;
+    }
+
+    .battle-name {
+      font-weight: bold;
+      color: #e0e0ff;
+      margin-bottom: 5px;
+    }
+
+    .battle-hp-bar {
+      height: 15px;
+      background: rgba(40, 40, 80, 0.8);
+      border: 1px solid #ffaa44;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .battle-hp-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #44ff44, #88ff88);
+      transition: width 0.2s;
+    }
+
+    .battle-hp-text {
+      font-size: 10px;
+      margin-top: 3px;
+      color: #aabbdd;
+    }
+
+    .battle-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .battle-button {
+      flex: 1;
+      padding: 10px;
+      background: #6688cc;
+      border: 1px solid #aa88ff;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .battle-button:hover:not(:disabled) {
+      background: #7799dd;
+      border-color: #ffaa44;
+      box-shadow: 0 0 10px rgba(255, 170, 68, 0.3);
+    }
+
+    .battle-button:disabled {
+      background: #445566;
+      border-color: #6688cc;
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .battle-log {
+      font-size: 11px;
+      color: #8899bb;
+      margin-top: 10px;
+      max-height: 60px;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+
+    .battle-log-entry {
+      margin-bottom: 3px;
+    }
+
+    /* ===== GAME MENU ===== */
+    #game-menu-modal .modal-content {
+      width: 400px;
+    }
+
+    .menu-button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      background: #6688cc;
+      border: 1px solid #aa88ff;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .menu-button:hover {
+      background: #7799dd;
+      border-color: #ffaa44;
+      box-shadow: 0 0 10px rgba(255, 170, 68, 0.3);
+    }
+
+    /* ===== CHANGELOG MODAL ===== */
+    #changelog-modal .modal-content {
+      width: 600px;
+      max-height: 80vh;
+    }
+
+    .changelog-entry {
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #445566;
+    }
+
+    .changelog-version {
+      font-weight: bold;
+      color: #aa88ff;
+      margin-bottom: 8px;
+    }
+
+    .changelog-items {
+      font-size: 12px;
+      color: #aabbdd;
+      margin-left: 15px;
+    }
+
+    .changelog-item {
+      margin-bottom: 5px;
+    }
+
+    /* Scrollbar styling */
+    .modal-content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .modal-content::-webkit-scrollbar-track {
+      background: rgba(40, 40, 80, 0.3);
+    }
+
+    .modal-content::-webkit-scrollbar-thumb {
+      background: #6688cc;
+      border-radius: 4px;
+    }
+
+    .modal-content::-webkit-scrollbar-thumb:hover {
+      background: #aa88ff;
+    }
+  </style>
+  <script type="module" crossorigin src="./assets/index-C_uPvN43.js"></script>
+</head>
+<body>
+  <div id="game-container"></div>
+
+  <!-- HUD (Top-Left) -->
+  <div id="hud">
+    <div class="hud-section">
+      <div class="hud-row">
+        <span class="hud-label">Version</span>
+        <span class="hud-value" id="hud-version">0.7.0</span>
+      </div>
+      <div class="hud-row">
+        <span class="hud-label">Branch</span>
+      </div>
+      <div id="hud-branch" style="color: #8899bb; font-size: 11px; margin-bottom: 8px;">Origin</div>
+
+      <div class="hud-row">
+        <span class="hud-label">HP</span>
+        <span class="hud-value" id="hud-hp">100/100</span>
+      </div>
+      <div class="hp-bar">
+        <div class="hp-fill" id="hud-hp-fill" style="width: 100%;"></div>
+      </div>
+
+      <div class="hud-row" style="margin-top: 8px;">
+        <span class="hud-label">Stamina</span>
+        <span class="hud-value" id="hud-stamina">100/100</span>
+      </div>
+      <div class="stamina-bar">
+        <div class="stamina-fill" id="hud-stamina-fill" style="width: 100%;"></div>
+      </div>
+
+      <div class="hud-row" style="margin-top: 8px;">
+        <span class="hud-label">Resonance</span>
+        <span class="hud-value" id="hud-resonance">0</span>
+      </div>
+      <div class="resonance-bar">
+        <div class="resonance-fill" id="hud-resonance-fill" style="width: 0%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gauntlet UI (Top-Right) -->
+  <div id="gauntlet-ui">
+    <div class="stone-slot" data-slot="0">⚪</div>
+    <div class="stone-slot" data-slot="1">⚪</div>
+    <div class="stone-slot" data-slot="2">⚪</div>
+    <div class="stone-slot" data-slot="3">⚪</div>
+    <div class="stone-slot" data-slot="4">⚪</div>
+  </div>
+
+  <!-- Build Mode Indicator -->
+  <div id="build-mode-indicator">BUILD MODE</div>
+
+  <!-- Hotbar (Bottom-Center) -->
+  <div id="hotbar">
+    <div class="hotbar-slot" data-slot="0">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="1">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="2">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="3">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="4">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="5">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="6">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="7">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+    <div class="hotbar-slot" data-slot="8">
+      <span class="hotbar-icon">-</span>
+      <span class="hotbar-count">0</span>
+    </div>
+  </div>
+
+  <!-- Controls Hint -->
+  <div id="controls-hint">
+    A/D: Move | SPACE: Jump | E: Interact | B: Build | Q: Invisibility | G: Gauntlet | C: Craft | I/TAB: Inventory | M: Map | L: Ledger | ESC: Menu
+  </div>
+
+  <!-- Version Badge (Bottom-Left) -->
+  <div id="version-badge">v0.7.0 - Click for changelog</div>
+
+  <!-- Message Area -->
+  <div id="message-area"></div>
+
+  <!-- ===== MODALS ===== -->
+
+  <!-- Inventory Modal -->
+  <div id="inventory-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('inventory-modal')">&times;</span>
+      <div class="modal-header">Inventory</div>
+      <div id="inventory-grid" class="inventory-grid"></div>
+    </div>
+  </div>
+
+  <!-- Crafting Modal -->
+  <div id="crafting-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('crafting-modal')">&times;</span>
+      <div class="modal-header">Crafting</div>
+      <div id="recipe-list" class="recipe-list"></div>
+    </div>
+  </div>
+
+  <!-- Gauntlet Equip Modal -->
+  <div id="gauntlet-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('gauntlet-modal')">&times;</span>
+      <div class="modal-header">Equip Stones</div>
+      <div id="stone-grid" class="stone-grid"></div>
+    </div>
+  </div>
+
+  <!-- Ledger Modal -->
+  <div id="ledger-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('ledger-modal')">&times;</span>
+      <div class="modal-header">Ledger</div>
+      <div class="ledger-stats">
+        <div class="stat-box">
+          <div class="stat-label">Echoes Absorbed</div>
+          <div class="stat-value" id="ledger-echoes">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Worlds Explored</div>
+          <div class="stat-value" id="ledger-worlds">1</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Stones Owned</div>
+          <div class="stat-value" id="ledger-stones">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Total Distance</div>
+          <div class="stat-value" id="ledger-distance">0 m</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map Modal -->
+  <div id="map-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('map-modal')">&times;</span>
+      <div class="modal-header">Multiverse Map</div>
+      <canvas id="map-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- Game Menu -->
+  <div id="game-menu-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('game-menu-modal')">&times;</span>
+      <div class="modal-header">Game Menu</div>
+      <button class="menu-button" onclick="resumeGame()">Resume Game</button>
+      <button class="menu-button" onclick="goToMap()">View Map</button>
+      <button class="menu-button" onclick="viewLedger()">View Ledger</button>
+      <button class="menu-button" onclick="alert('Credits coming soon!')">Credits</button>
+      <button class="menu-button" onclick="alert('Settings coming soon!')">Settings</button>
+    </div>
+  </div>
+
+  <!-- Changelog Modal -->
+  <div id="changelog-modal" class="modal-overlay">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeModal('changelog-modal')">&times;</span>
+      <div class="modal-header">Changelog</div>
+      <div id="changelog-content">
+        <div class="changelog-entry">
+          <div class="changelog-version">v0.7.0 - MVP Build</div>
+          <div class="changelog-items">
+            <div class="changelog-item">Core gameplay: movement, mining, building</div>
+            <div class="changelog-item">Echo AI and basic turn-based combat</div>
+            <div class="changelog-item">Power stones: Invisibility and Time Warp</div>
+            <div class="changelog-item">Crafting and inventory systems</div>
+            <div class="changelog-item">Portal travel between branches</div>
+            <div class="changelog-item">HUD with stats and gauntlet display</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Turn Battle UI -->
+  <div id="turn-battle-ui">
+    <div class="battle-info">
+      <div class="battle-side">
+        <div class="battle-name">You</div>
+        <div class="battle-hp-bar">
+          <div class="battle-hp-fill" id="battle-player-hp-fill" style="width: 100%;"></div>
+        </div>
+        <div class="battle-hp-text" id="battle-player-hp">100/100</div>
+      </div>
+      <div class="battle-side">
+        <div class="battle-name" id="battle-echo-name">Echo v1.0</div>
+        <div class="battle-hp-bar">
+          <div class="battle-hp-fill" id="battle-echo-hp-fill" style="width: 100%;"></div>
+        </div>
+        <div class="battle-hp-text" id="battle-echo-hp">30/30</div>
+      </div>
+    </div>
+    <div class="battle-log" id="battle-log"></div>
+    <div class="battle-actions">
+      <button class="battle-button" id="battle-attack-btn" onclick="executeBattleAction('Attack')">Attack</button>
+      <button class="battle-button" id="battle-defend-btn" onclick="executeBattleAction('Defend')">Defend</button>
+      <button class="battle-button" id="battle-stone-btn" onclick="executeBattleAction('UseStone')">Use Stone</button>
+      <button class="battle-button" id="battle-flee-btn" onclick="executeBattleAction('Flee')">Flee</button>
+    </div>
+  </div>
+
+  <script>
+    // Global functions for modal and battle UI
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+
+    function resumeGame() {
+      closeModal('game-menu-modal');
+    }
+
+    function goToMap() {
+      closeModal('game-menu-modal');
+      document.getElementById('map-modal').classList.add('active');
+    }
+
+    function viewLedger() {
+      closeModal('game-menu-modal');
+      document.getElementById('ledger-modal').classList.add('active');
+    }
+
+    // Battle UI function (will be called from GameScene)
+    window.executeBattleAction = function(action) {
+      // This will be overridden by GameScene
+    };
+  </script>
+
+</body>
+</html>

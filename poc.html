@@ -33,6 +33,32 @@ canvas { display: block; }
   text-shadow: 0 1px 4px rgba(0,0,0,0.8);
   background: rgba(0,0,0,0.3); padding: 8px 16px; border-radius: 8px;
 }
+#game-version {
+  position: absolute; bottom: 12px; left: 12px;
+  color: rgba(120,115,170,0.6); font-size: 11px; cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  transition: color 0.2s;
+}
+#game-version:hover { color: rgba(180,175,220,0.9); }
+#changelog-modal {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7); z-index: 200;
+  justify-content: center; align-items: center;
+}
+#changelog-panel {
+  background: #1a1830; border: 1px solid rgba(150,130,255,0.2); border-radius: 12px;
+  padding: 24px 32px; max-width: 520px; width: 90%; max-height: 70vh; overflow-y: auto;
+  color: #c8c4e0; font-size: 13px; line-height: 1.7; position: relative;
+}
+#changelog-panel h2 { color: #b8b0ff; font-size: 18px; font-weight: 500; margin-bottom: 16px; }
+#changelog-panel .cl-version { color: #9988dd; font-weight: 600; font-size: 14px; margin-top: 16px; margin-bottom: 4px; }
+#changelog-panel .cl-version:first-of-type { margin-top: 0; }
+#changelog-panel .cl-entry { color: #aaa8cc; padding-left: 12px; border-left: 2px solid rgba(150,130,255,0.15); margin: 4px 0; }
+#changelog-panel .cl-close {
+  position: absolute; top: 12px; right: 16px; background: none; border: none;
+  color: #8880bb; font-size: 20px; cursor: pointer;
+}
+#changelog-panel .cl-close:hover { color: #c8c0ff; }
 #hotbar {
   position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
   display: flex; gap: 4px;
@@ -60,6 +86,23 @@ canvas { display: block; }
   color: #ffcc44; font-size: 14px; font-weight: 600;
   text-shadow: 0 1px 4px rgba(0,0,0,0.8);
   display: none;
+}
+#gauntlet-ui {
+  position: absolute; top: 16px; right: 16px;
+  display: flex; gap: 6px;
+  z-index: 8;
+}
+.gauntlet-slot {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid rgba(100,100,100,0.5);
+  background: rgba(0,0,0,0.4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  box-shadow: inset 0 0 4px rgba(0,0,0,0.8);
+}
+.gauntlet-slot.filled {
+  border-color: #b8c0ff;
+  box-shadow: 0 0 8px var(--stone-color, #999), inset 0 0 4px rgba(0,0,0,0.8);
 }
 #message-area {
   position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -168,6 +211,25 @@ canvas { display: block; }
   border-radius: 4px; white-space: nowrap; opacity: 0; transition: opacity 0.2s;
 }
 .map-node:hover .label { opacity: 1; }
+#turn-battle-ui {
+  position: fixed; bottom: 0; left: 0; width: 100%;
+  background: linear-gradient(180deg, rgba(20,15,40,0.95), rgba(10,5,25,0.98));
+  border-top: 2px solid rgba(150,130,255,0.3);
+  padding: 16px; z-index: 40;
+  display: none;
+}
+#turn-battle-ui.active { display: block; }
+.battle-info { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 12px; align-items: center; }
+.battle-character { display: flex; flex-direction: column; gap: 8px; }
+.battle-character-name { color: #b8b0ff; font-weight: 600; font-size: 14px; }
+.battle-hp-bar { width: 150px; height: 16px; background: rgba(0,0,0,0.4); border: 1px solid rgba(100,100,100,0.5); border-radius: 4px; overflow: hidden; }
+.battle-hp-fill { height: 100%; background: linear-gradient(90deg, #ff4466, #ff6688); }
+.battle-actions { display: flex; gap: 8px; justify-content: center; }
+.battle-btn { padding: 10px 16px; background: rgba(100,80,200,0.2); border: 1px solid rgba(150,130,255,0.3);
+  color: #b8b0ff; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+.battle-btn:hover { background: rgba(100,80,200,0.4); border-color: rgba(150,130,255,0.6); }
+.battle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.battle-status { color: #aaa; font-size: 12px; text-align: center; }
 </style>
 </head>
 <body>
@@ -212,12 +274,82 @@ canvas { display: block; }
   </div>
 
   <div id="controls-hint">
-    SPACE jump · SHIFT attack · A/D move · B build · E interact · 1-9 hotbar · C craft · I inventory · M map · L ledger · ESC menu
+    SPACE jump · CLICK attack/mine · A/D move · B build · E interact · 1-9 hotbar · C craft · I inventory · M map · L ledger · ESC menu
+  </div>
+
+  <div id="game-version" onclick="document.getElementById('changelog-modal').style.display='flex'">v0.6.0</div>
+</div>
+
+<div id="changelog-modal" onclick="if(event.target===this)this.style.display='none'">
+  <div id="changelog-panel">
+    <button class="cl-close" onclick="document.getElementById('changelog-modal').style.display='none'">&times;</button>
+    <h2>Echoes of Infinity — Changelog</h2>
+
+    <div class="cl-version">v0.6.0</div>
+    <div class="cl-entry">Gauntlet system with 5 Power Stone slots — equip stones to unlock abilities</div>
+    <div class="cl-entry">Invisibility Cloak stone (Echo 1): press Q to become invisible for 5 seconds</div>
+    <div class="cl-entry">Time Warp stone (Echo 2): turn-based battle system with strategic actions</div>
+    <div class="cl-entry">Tree leaf canopies with LEAF tile blocks (non-solid, breakable)</div>
+    <div class="cl-entry">Portal transition animations: cinematic zoom out, multiverse view, zoom in</div>
+    <div class="cl-entry">Defeated echo indicators on multiverse branches</div>
+
+        <div class="cl-version">v0.5.0</div>
+    <div class="cl-entry">Consistent spawn position across multiverses — player keeps XY coordinates when traveling, blocks cleared if needed</div>
+    <div class="cl-entry">Camera zooms in smoothly when approaching an Echo for combat</div>
+    <div class="cl-entry">Click to attack (replaces SHIFT) — hold click for continuous attacks</div>
+    <div class="cl-entry">Smoother block step-up: character moves up then forward instead of clipping through</div>
+
+    <div class="cl-version">v0.4.0</div>
+    <div class="cl-entry">Step-up animation speed matches walking pace</div>
+    <div class="cl-entry">Multiverse viewer only shows previously visited branches</div>
+    <div class="cl-entry">Hold-to-mine: continuous mining while mouse is held down</div>
+    <div class="cl-entry">Smooth tweening when stepping up blocks</div>
+
+    <div class="cl-version">v0.3.0</div>
+    <div class="cl-entry">Plants render as 🌿 emoji pickups instead of green blocks, reduced spawn rate</div>
+    <div class="cl-entry">Auto-step up single-block ledges without jumping</div>
+    <div class="cl-entry">Walk animation with swinging arms and legs</div>
+    <div class="cl-entry">Character faces movement direction</div>
+
+    <div class="cl-version">v0.2.0</div>
+    <div class="cl-entry">Multiverse slice viewer — edge-on 3D sheets of glass showing real world snapshots</div>
+    <div class="cl-entry">Click-to-travel in multiverse viewer</div>
+    <div class="cl-entry">Player ghost outline overlay on non-origin branches</div>
+    <div class="cl-entry">Thinner, more angled slices with subtle perspective</div>
+
+    <div class="cl-version">v0.1.0</div>
+    <div class="cl-entry">Initial POC: terrain generation, mining, crafting, combat, Echo encounters</div>
+    <div class="cl-entry">Building system with workbench and recipes</div>
+    <div class="cl-entry">Detailed character rendering with visual trait mixing on Echo absorption</div>
+    <div class="cl-entry">World ledger, inventory, crafting menu, game menu</div>
+    <div class="cl-entry">Four distinct branches: Origin, Crimson Dusk, Emerald Deep, Obsidian Void</div>
   </div>
 </div>
 
 <div id="message-area"></div>
 <div id="absorption-overlay"></div>
+
+<div id="turn-battle-ui">
+  <div class="battle-info">
+    <div class="battle-character">
+      <div class="battle-character-name">You</div>
+      <div class="battle-hp-bar"><div class="battle-hp-fill" id="player-hp-bar" style="width:100%"></div></div>
+      <div id="player-hp-text" style="color: #aaa; font-size: 11px;"></div>
+    </div>
+    <div class="battle-status" id="battle-status" style="flex: 1;"></div>
+    <div class="battle-character">
+      <div class="battle-character-name" id="echo-name">Echo</div>
+      <div class="battle-hp-bar"><div class="battle-hp-fill" id="echo-hp-bar" style="width:100%"></div></div>
+      <div id="echo-hp-text" style="color: #aaa; font-size: 11px;"></div>
+    </div>
+  </div>
+  <div class="battle-actions" id="battle-actions">
+    <button class="battle-btn" id="btn-attack" onclick="turnBattleAction('attack')">Attack</button>
+    <button class="battle-btn" id="btn-defend" onclick="turnBattleAction('defend')">Defend</button>
+    <button class="battle-btn" id="btn-stone" onclick="turnBattleAction('stone')">Use Stone</button>
+    <button class="battle-btn" id="btn-flee" onclick="turnBattleAction('flee')">Flee</button>
+  </div>
+</div>
 
 <div id="inventory-modal" class="modal-overlay">
   <div class="modal-panel" style="position: relative;">
@@ -267,7 +399,7 @@ canvas { display: block; }
 
     <h3>Controls</h3>
     <div class="row"><span>SPACE</span><span>Jump</span></div>
-    <div class="row"><span>SHIFT</span><span>Attack</span></div>
+    <div class="row"><span>Click</span><span>Attack / Mine</span></div>
     <div class="row"><span>A/D</span><span>Move Left/Right</span></div>
     <div class="row"><span>B</span><span>Toggle Build Mode</span></div>
     <div class="row"><span>E</span><span>Interact</span></div>
@@ -280,6 +412,27 @@ canvas { display: block; }
 
     <button onclick="restartGame()" style="width: 100%; padding: 12px; margin-top: 24px; background: rgba(200,80,100,0.2); border: 1px solid rgba(200,130,130,0.3); color: #ff9999; border-radius: 6px; cursor: pointer;">Restart</button>
   </div>
+</div>
+
+<div id="gauntlet-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative;">
+    <button class="modal-close-btn" onclick="closeModal('gauntlet-modal')">×</button>
+    <h2>⏱️ Gauntlet</h2>
+    <h3>Equipped Stones</h3>
+    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 12px 0; background: rgba(0,0,0,0.2); padding: 16px; border-radius: 8px;">
+      <div id="gauntlet-slots"></div>
+    </div>
+    <h3>Owned Stones</h3>
+    <div id="owned-stones"></div>
+  </div>
+</div>
+
+<div id="gauntlet-ui">
+  <div class="gauntlet-slot" id="slot-0"></div>
+  <div class="gauntlet-slot" id="slot-1"></div>
+  <div class="gauntlet-slot" id="slot-2"></div>
+  <div class="gauntlet-slot" id="slot-3"></div>
+  <div class="gauntlet-slot" id="slot-4"></div>
 </div>
 
 <script>
@@ -300,7 +453,7 @@ const MOVE_SPEED = 3.5;
 const WORLD_W = 200;
 const WORLD_H = 80;
 
-const AIR = 0, DIRT = 1, STONE = 2, GRASS = 3, PLANT = 4, CRYSTAL = 5, PORTAL = 6, WOOD = 7;
+const AIR = 0, DIRT = 1, STONE = 2, GRASS = 3, PLANT = 4, CRYSTAL = 5, PORTAL = 6, WOOD = 7, LEAF = 8;
 
 const TILE_COLORS = {
   [DIRT]:    ['#5a4030','#6b5040','#4a3525'],
@@ -310,6 +463,7 @@ const TILE_COLORS = {
   [CRYSTAL]: ['#8855ee','#aa77ff','#6633cc'],
   [PORTAL]:  ['#4488ff','#66aaff','#2266dd'],
   [WOOD]:    ['#8B6914','#9B7924','#7B5904'],
+  [LEAF]:    ['#2d8a4e','#38a85c','#248040'],
 };
 
 const ITEM_NAMES = {
@@ -356,6 +510,7 @@ const MINING_TIMES = {
   3: 2,
   5: 8,
   7: 4,
+  8: 1,
 };
 
 let gameStarted = false;
@@ -375,6 +530,15 @@ let multiverseViewActive = false;
 let mvSelectedIndex = 0;
 let mvScrollOffset = 0; // smooth animation target
 let mvTransition = 0; // 0-1 for open/close animation
+
+// Portal transition animation
+let portalTransition = null; // { phase: 'zoomOut'|'sliceView'|'zoomIn', timer: 0, targetBranch: branchId }
+
+// Defeated echoes per branch
+let defeatedEchoBranches = new Set();
+
+// Turn-based battle state
+let turnBattle = null; // { active: true, playerTurn: true, defending: false, echoRef: echo }
 
 const visitedBranches = new Set(['origin']); // origin is always visited
 
@@ -433,19 +597,47 @@ function generateWorld(seed, branchType) {
       else tiles[x][y] = STONE;
     }
 
-    // Trees on surface (trunk only - leaves added in second pass)
+    // Trees: trunk only (canopy added in second pass after all columns exist)
     if (rng() < 0.12) {
       const surfaceY = Math.floor(noise(x * 0.05) * 20) + 30 - 6;
-      if (surfaceY > 2 && tiles[x][surfaceY] === AIR && surfaceY + 1 < WORLD_H && tiles[x][surfaceY + 1] !== AIR) {
-        tiles[x][surfaceY] = WOOD;
-        tiles[x][surfaceY - 1] = WOOD;
-        tiles[x][surfaceY - 2] = WOOD;
+      if (surfaceY > 4 && tiles[x][surfaceY] === AIR && surfaceY + 1 < WORLD_H && tiles[x][surfaceY + 1] !== AIR) {
+        const trunkHeight = rng() < 0.5 ? 2 : 3;
+        for (let ty = 0; ty < trunkHeight; ty++) {
+          if (surfaceY - ty >= 0) tiles[x][surfaceY - ty] = WOOD;
+        }
       }
     }
 
     const plantY = Math.floor(noise(x * 0.05) * 20) + 30 - 6;
     if (rng() < 0.06 && plantY >= 0 && plantY < WORLD_H && tiles[x][plantY] === AIR) {
       tiles[x][plantY] = PLANT;
+    }
+  }
+
+  // Second pass: add leaf canopies to trees (all columns now exist)
+  for (let x = 0; x < WORLD_W; x++) {
+    for (let y = 1; y < WORLD_H; y++) {
+      // Find the top of a wood trunk (wood with air above)
+      if (tiles[x][y] === WOOD && (y === 0 || tiles[x][y - 1] === AIR)) {
+        const canopyY = y - 1;
+        // 5-wide row at canopy level
+        for (let dx = -2; dx <= 2; dx++) {
+          const cx = x + dx;
+          if (cx >= 0 && cx < WORLD_W && canopyY >= 0 && tiles[cx][canopyY] === AIR) {
+            tiles[cx][canopyY] = LEAF;
+          }
+        }
+        // 3-wide row above that
+        const topY = canopyY - 1;
+        if (topY >= 0) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const cx = x + dx;
+            if (cx >= 0 && cx < WORLD_W && tiles[cx][topY] === AIR) {
+              tiles[cx][topY] = LEAF;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -527,18 +719,57 @@ const player = {
   invincibleTimer: 0,
   equippedTool: 101,
   visualYOffset: 0, // for smooth step-up tweening
+  visualXOffset: 0, // for smooth step-up horizontal component
   equippedToolDurability: 100,
+  // Gauntlet system
+  gauntlet: [null, null, null, null, null],  // 5 slots for Power Stones
+  ownedStones: [],  // all stones the player has found
+  activeStones: [],  // stones currently in gauntlet (up to 5)
+  // Invisibility cloak stone
+  invisible: false,
+  invisibleTimer: 0,
+  invisibleCooldown: 0,
 };
 
 const branchLedger = {};
 
-function spawnPlayer(world) {
-  const spawnX = world.branchType === 'origin' ? 30 : Math.floor(WORLD_W * 0.8);
-  player.x = spawnX * TILE;
-  for (let y = 0; y < WORLD_H; y++) {
-    if (world.tiles[spawnX][y] !== AIR) {
-      player.y = (y - 2) * TILE;
-      break;
+function spawnPlayer(world, preservePosition) {
+  if (preservePosition) {
+    // Keep the same XY position from the previous branch
+    // Clear blocks around the player if they'd be stuck inside terrain
+    const px = Math.floor(player.x / TILE);
+    const py = Math.floor(player.y / TILE);
+    const clearRadius = 2; // clear a small area around spawn point
+    let needsClear = false;
+    // Check if player would be inside solid blocks
+    for (let dx = 0; dx <= Math.ceil(player.w / TILE); dx++) {
+      for (let dy = 0; dy <= Math.ceil(player.h / TILE); dy++) {
+        const cx = px + dx, cy = py + dy;
+        if (cx >= 0 && cx < WORLD_W && cy >= 0 && cy < WORLD_H && isSolid(world.tiles[cx][cy])) {
+          needsClear = true;
+        }
+      }
+    }
+    if (needsClear) {
+      // "Blow up" a small area around the player's position
+      for (let dx = -clearRadius; dx <= clearRadius + 1; dx++) {
+        for (let dy = -clearRadius; dy <= clearRadius + 1; dy++) {
+          const cx = px + dx, cy = py + dy;
+          if (cx >= 0 && cx < WORLD_W && cy >= 0 && cy < WORLD_H && isSolid(world.tiles[cx][cy])) {
+            world.tiles[cx][cy] = AIR;
+          }
+        }
+      }
+    }
+  } else {
+    // First spawn: find surface at position 30
+    const spawnX = 30;
+    player.x = spawnX * TILE;
+    for (let y = 0; y < WORLD_H; y++) {
+      if (world.tiles[spawnX][y] !== AIR) {
+        player.y = (y - 2) * TILE;
+        break;
+      }
     }
   }
   player.vx = 0;
@@ -625,7 +856,7 @@ window.addEventListener('keydown', e => {
         currentBranch = branch.id;
         visitedBranches.add(currentBranch);
         const world = getWorld(currentBranch);
-        spawnPlayer(world);
+        spawnPlayer(world, true);
         if (currentBranch === 'origin') { echo = null; }
         else { spawnEcho(world); }
         showMsg(`Traveling to ${branch.name}`, 120);
@@ -659,6 +890,16 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.key.toLowerCase() === 'l') showModal('ledger-modal');
+  if (e.key.toLowerCase() === 'g') showModal('gauntlet-modal');
+  if (e.key.toLowerCase() === 'q') {
+    // Toggle invisibility if Invisibility Cloak is in gauntlet
+    const hasInvisibility = player.activeStones.some(s => s.id === 'invisibility');
+    if (hasInvisibility && player.invisibleCooldown <= 0) {
+      player.invisible = !player.invisible;
+      player.invisibleTimer = 300; // 5 seconds at 60fps
+      player.invisibleCooldown = 600; // 10 second cooldown
+    }
+  }
   if (e.key === 'Escape') {
     if (gamePaused) {
       closeModal('menu-modal');
@@ -699,7 +940,7 @@ function handleMultiverseClick(mx, my) {
           currentBranch = branch.id;
           visitedBranches.add(currentBranch);
           const world = getWorld(currentBranch);
-          spawnPlayer(world);
+          spawnPlayer(world, true);
           if (currentBranch === 'origin') { echo = null; }
           else { spawnEcho(world); }
           showMsg(`Traveling to ${branch.name}`, 120);
@@ -720,15 +961,42 @@ canvas.addEventListener('mouseup', e => {
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-const camera = { x: 0, y: 0 };
+const camera = { x: 0, y: 0, zoom: 1, targetZoom: 1 };
 
 function updateCamera() {
-  const targetX = player.x - canvas.width / 2;
-  const targetY = player.y - canvas.height / 2;
+  // Zoom in when near an Echo
+  if (echo && echo.hp > 0) {
+    const dx = echo.x - player.x;
+    const dy = echo.y - player.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const zoomStartDist = 200;
+    const zoomMaxDist = 60;
+    if (dist < zoomStartDist) {
+      const t = 1 - Math.max(0, (dist - zoomMaxDist) / (zoomStartDist - zoomMaxDist));
+      camera.targetZoom = 1 + t * 0.6; // up to 1.6x zoom
+    } else {
+      camera.targetZoom = 1;
+    }
+  } else {
+    camera.targetZoom = 1;
+  }
+  camera.zoom += (camera.targetZoom - camera.zoom) * 0.05;
+
+  // When zoomed, camera should center between player and echo
+  const effectiveW = canvas.width / camera.zoom;
+  const effectiveH = canvas.height / camera.zoom;
+  let focusX = player.x;
+  let focusY = player.y;
+  if (echo && echo.hp > 0 && camera.zoom > 1.05) {
+    focusX = (player.x + echo.x) / 2;
+    focusY = (player.y + echo.y) / 2;
+  }
+  const targetX = focusX - effectiveW / 2;
+  const targetY = focusY - effectiveH / 2;
   camera.x += (targetX - camera.x) * 0.1;
   camera.y += (targetY - camera.y) * 0.1;
-  camera.x = Math.max(0, Math.min(WORLD_W * TILE - canvas.width, camera.x));
-  camera.y = Math.max(-200, Math.min(WORLD_H * TILE - canvas.height, camera.y));
+  camera.x = Math.max(0, Math.min(WORLD_W * TILE - effectiveW, camera.x));
+  camera.y = Math.max(-200, Math.min(WORLD_H * TILE - effectiveH, camera.y));
 }
 
 function tileAt(world, px, py) {
@@ -739,7 +1007,7 @@ function tileAt(world, px, py) {
 }
 
 function isSolid(tile) {
-  return tile === DIRT || tile === STONE || tile === GRASS || tile === WOOD || tile === CRYSTAL;
+  return tile === DIRT || tile === STONE || tile === GRASS || tile === WOOD || tile === CRYSTAL || tile === LEAF;
 }
 
 function collideEntity(entity, world) {
@@ -775,16 +1043,17 @@ function collideEntity(entity, world) {
       const clear2 = aboveWall2 >= 0 ? !isSolid(world.tiles[wallTileX][aboveWall2]) : true;
       // Single block: the tile directly above the wall is air
       if (clear1 && clear2) {
-        // Step up with visual tween
+        // Step up with visual tween — move up first, then forward
+        const oldX = entity.x;
         const oldY = entity.y;
         entity.y = wallTileY * TILE - entity.h - 0.01;
         if (entity.facing > 0) entity.x = wallTileX * TILE;
         else entity.x = (wallTileX + 1) * TILE - entity.w;
         entity.vy = 0;
         entity.onGround = true;
-        // Set visual offset so rendering tweens smoothly
         if (entity.visualYOffset !== undefined) {
-          entity.visualYOffset = oldY - entity.y; // positive = was lower, needs to animate up
+          entity.visualYOffset = oldY - entity.y;
+          entity.visualXOffset = oldX - entity.x;
         }
       }
     }
@@ -808,6 +1077,21 @@ function collideEntity(entity, world) {
           entity.vy = 0;
         }
       }
+    }
+  }
+
+  // World boundary clamping — prevent falling off edges
+  if (entity.x < 0) { entity.x = 0; entity.vx = 0; }
+  if (entity.x + entity.w > WORLD_W * TILE) { entity.x = WORLD_W * TILE - entity.w; entity.vx = 0; }
+  if (entity.y < -TILE * 4) { entity.y = -TILE * 4; entity.vy = 0; }
+  if (entity.y > WORLD_H * TILE) {
+    // Fell below the world — respawn at surface
+    entity.y = 0;
+    entity.vy = 0;
+    const midX = Math.floor(entity.x / TILE);
+    const safeX = Math.max(0, Math.min(WORLD_W - 1, midX));
+    for (let y = 0; y < WORLD_H; y++) {
+      if (isSolid(world.tiles[safeX][y])) { entity.y = (y - 2) * TILE; break; }
     }
   }
 }
@@ -857,14 +1141,21 @@ function removeItemFromInventory(itemId, count) {
 }
 
 function updatePlayer(world, dt) {
-  // Tween visual step-up offset toward 0 at walking speed (adjusted for ~45° angle)
+  // Tween step-up: move vertically first, then horizontally (so player goes UP then OVER)
+  const stepSpeed = MOVE_SPEED * 0.85;
   if (player.visualYOffset !== 0) {
-    // Move toward 0 at a rate proportional to walk speed along the diagonal
-    const stepSpeed = MOVE_SPEED * 0.9; // slightly slower than horizontal walk for the climb
+    // Vertical first — move up before moving forward
     if (player.visualYOffset > 0) {
       player.visualYOffset = Math.max(0, player.visualYOffset - stepSpeed);
     } else {
       player.visualYOffset = Math.min(0, player.visualYOffset + stepSpeed);
+    }
+  } else if (player.visualXOffset !== 0) {
+    // Then horizontal — slide forward after reaching the top
+    if (player.visualXOffset > 0) {
+      player.visualXOffset = Math.max(0, player.visualXOffset - stepSpeed);
+    } else {
+      player.visualXOffset = Math.min(0, player.visualXOffset + stepSpeed);
     }
   }
 
@@ -876,28 +1167,20 @@ function updatePlayer(world, dt) {
   }
 
   if (player.attackCooldown > 0) player.attackCooldown -= dt;
-  if (keys['shift'] && player.attackCooldown <= 0 && !buildMode) {
-    player.attackTimer = 12;
-    player.attackCooldown = 25;
-    if (echo && echo.hp > 0) {
-      const dx = echo.x - player.x;
-      const dy = echo.y - player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 60 && Math.sign(dx) === player.facing) {
-        echo.hp -= player.power;
-        echo.vx = player.facing * 5;
-        echo.vy = -3;
-        if (echo.hp <= 0) {
-          triggerAbsorption();
-        }
-      }
-    }
-  }
   if (player.attackTimer > 0) player.attackTimer -= dt;
 
   player.stamina = Math.min(player.maxStamina, player.stamina + 0.15);
 
   if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
+
+  // Update invisibility
+  if (player.invisible) {
+    player.invisibleTimer -= dt;
+    if (player.invisibleTimer <= 0) {
+      player.invisible = false;
+    }
+  }
+  if (player.invisibleCooldown > 0) player.invisibleCooldown -= dt;
 
   collideEntity(player, world);
   updatePickupItems(world);
@@ -927,7 +1210,8 @@ function updateEcho(world, dt) {
   echo.facing = dx > 0 ? 1 : -1;
 
   if (echo.stateTimer <= 0) {
-    if (dist < 300) echo.state = 'chase';
+    // Don't chase if player is invisible
+    if (dist < 300 && !player.invisible) echo.state = 'chase';
     else echo.state = 'idle';
     echo.stateTimer = 30 + Math.random() * 30;
   }
@@ -981,6 +1265,11 @@ function triggerAbsorption() {
   player.maxHp += 15;
   player.hp = player.maxHp;
 
+  // Track defeated echo on this branch
+  if (echo) {
+    defeatedEchoBranches.add(currentBranch);
+  }
+
   if (echo && characterTraits.echoTraits[echo.id]) {
     const echoTraits = characterTraits.echoTraits[echo.id];
     characterTraits.player.hairColor = mixColors(characterTraits.player.hairColor, echoTraits.hairColor);
@@ -994,6 +1283,27 @@ function triggerAbsorption() {
     if (Math.random() < 0.2 && echoTraits.hairStyle !== characterTraits.player.hairStyle) {
       characterTraits.player.hairStyle = echoTraits.hairStyle;
     }
+  }
+
+  // Award Power Stones on first and second echo defeats
+  if (echoesAbsorbed === 1) {
+    // First echo: Invisibility Cloak
+    const stone = { id: 'invisibility', name: 'Invisibility Cloak', color: '#6688cc', emoji: '👻' };
+    player.ownedStones.push(stone);
+    if (player.gauntlet[0] === null) {
+      player.gauntlet[0] = stone;
+      player.activeStones.push(stone);
+    }
+    showMsg(`Power Stone Acquired: Invisibility Cloak\nPress Q to toggle invisibility`, 180);
+  } else if (echoesAbsorbed === 2) {
+    // Second echo: Time Warp
+    const stone = { id: 'timeWarp', name: 'Time Warp', color: '#ffaa44', emoji: '⏱️' };
+    player.ownedStones.push(stone);
+    if (player.gauntlet[1] === null) {
+      player.gauntlet[1] = stone;
+      player.activeStones.push(stone);
+    }
+    showMsg(`Power Stone Acquired: Time Warp\nBattle system is now turn-based`, 180);
   }
 
   recordBranchCompletion();
@@ -1044,11 +1354,52 @@ function getBranchBiome(branch) {
   return biomes[branch] || 'Unknown';
 }
 
+function tryAttackEcho() {
+  if (!echo || echo.hp <= 0 || player.attackCooldown > 0 || buildMode) return false;
+  const dx = echo.x - player.x;
+  const dy = echo.y - player.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 70) {
+    // Check if Time Warp stone is equipped (turn-based battles)
+    const hasTimeWarp = player.activeStones.some(s => s.id === 'timeWarp');
+
+    if (hasTimeWarp && !turnBattle) {
+      // Initiate turn-based battle
+      turnBattle = {
+        active: true,
+        playerTurn: true,
+        defending: false,
+        echoRef: echo
+      };
+      return true;
+    }
+
+    // Normal real-time combat
+    player.attackTimer = 12;
+    player.attackCooldown = 20;
+    player.facing = dx > 0 ? 1 : -1;
+    if (dist < 60) {
+      echo.hp -= player.power;
+      echo.vx = player.facing * 5;
+      echo.vy = -3;
+      if (echo.hp <= 0) {
+        triggerAbsorption();
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 function handleClick(e) {
   if (!gameStarted || gamePaused) return;
   const world = getWorld(currentBranch);
   const wx = Math.floor((mouseX + camera.x) / TILE);
   const wy = Math.floor((mouseY + camera.y) / TILE);
+
+  // Attack echo on left click if close enough
+  if (e.button === 0 && !buildMode && tryAttackEcho()) return;
+
   if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return;
 
   const pdx = wx * TILE - player.x;
@@ -1079,6 +1430,15 @@ function handleClick(e) {
 }
 
 function doMining(world, dt) {
+  // If holding mouse near echo, keep attacking instead of mining
+  if (mouseDown && !buildMode && echo && echo.hp > 0) {
+    const edx = echo.x - player.x;
+    const edy = echo.y - player.y;
+    if (Math.sqrt(edx * edx + edy * edy) < 70) {
+      tryAttackEcho();
+      return;
+    }
+  }
   // If mouse is held but no target, try to acquire one from cursor position
   if (!miningTarget && mouseDown && !buildMode && !multiverseViewActive) {
     const wx = Math.floor((mouseX + camera.x) / TILE);
@@ -1165,19 +1525,16 @@ function travelToBranch() {
   const branches = ['origin', 'wild1', 'wild2', 'wild3'];
   const currentIdx = branches.indexOf(currentBranch);
   const nextIdx = (currentIdx + 1) % branches.length;
-  currentBranch = branches[nextIdx];
-  visitedBranches.add(currentBranch);
+  const targetBranch = branches[nextIdx];
+  visitedBranches.add(targetBranch);
 
-  const world = getWorld(currentBranch);
-  spawnPlayer(world);
-
-  if (currentBranch === 'origin') {
-    echo = null;
-    showMsg("Returning to Origin Branch", 120);
-  } else {
-    spawnEcho(world);
-    showMsg(`Entering ${getBranchName(currentBranch)}`, 120);
-  }
+  // Start portal transition animation
+  portalTransition = {
+    phase: 'zoomOut',
+    timer: 0,
+    targetBranch: targetBranch
+  };
+  gamePaused = true;
 }
 
 function showMsg(text, duration) {
@@ -1187,6 +1544,174 @@ function showMsg(text, duration) {
   el.textContent = text;
   el.style.opacity = '1';
   setTimeout(() => el.style.opacity = '0', duration * 16);
+}
+
+function updateGauntletUI() {
+  // Update HUD gauntlet display
+  for (let i = 0; i < 5; i++) {
+    const slot = document.getElementById(`slot-${i}`);
+    const stone = player.gauntlet[i];
+    if (stone) {
+      slot.className = 'gauntlet-slot filled';
+      slot.textContent = stone.emoji;
+      slot.style.setProperty('--stone-color', stone.color);
+    } else {
+      slot.className = 'gauntlet-slot';
+      slot.textContent = '';
+    }
+  }
+
+  // Update gauntlet modal
+  if (document.getElementById('gauntlet-modal').style.display === 'flex') {
+    updateGauntletModalUI();
+  }
+}
+
+function updateGauntletModalUI() {
+  let slotHTML = '';
+  for (let i = 0; i < 5; i++) {
+    const stone = player.gauntlet[i];
+    if (stone) {
+      slotHTML += `<div style="background: rgba(0,0,0,0.3); border: 2px solid ${stone.color}; border-radius: 8px; padding: 12px; text-align: center; cursor: pointer;" onclick="unequipStone(${i})">
+        <div style="font-size: 24px; margin-bottom: 8px;">${stone.emoji}</div>
+        <div style="font-size: 12px; color: #b8b0ff; font-weight: 600;">${stone.name}</div>
+        <div style="font-size: 10px; color: #888; margin-top: 4px;">Click to unequip</div>
+      </div>`;
+    } else {
+      slotHTML += `<div style="background: rgba(0,0,0,0.2); border: 2px dashed rgba(150,130,255,0.2); border-radius: 8px; padding: 12px; text-align: center; color: #666; font-size: 12px;">Empty</div>`;
+    }
+  }
+  document.getElementById('gauntlet-slots').innerHTML = `<div style="grid-column: 1/-1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">${slotHTML}</div>`;
+
+  let ownedHTML = '';
+  if (player.ownedStones.length === 0) {
+    ownedHTML = '<div style="color: #666; padding: 16px; text-align: center;">No stones yet. Defeat echoes to earn Power Stones!</div>';
+  } else {
+    ownedHTML = '<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">';
+    player.ownedStones.forEach((stone, idx) => {
+      const equipped = player.gauntlet.includes(stone);
+      ownedHTML += `<div style="background: rgba(0,0,0,0.3); border: 1px solid ${equipped ? stone.color : 'rgba(150,130,255,0.2)'}; border-radius: 8px; padding: 12px; cursor: pointer; opacity: ${equipped ? 1 : 0.7};" onclick="equipStone(${idx})">
+        <div style="font-size: 20px; margin-bottom: 4px;">${stone.emoji}</div>
+        <div style="font-size: 12px; color: #b8b0ff; font-weight: 600;">${stone.name}</div>
+        <div style="font-size: 10px; color: #888; margin-top: 4px;">${equipped ? 'Equipped' : 'Click to equip'}</div>
+      </div>`;
+    });
+    ownedHTML += '</div>';
+  }
+  document.getElementById('owned-stones').innerHTML = ownedHTML;
+}
+
+function equipStone(idx) {
+  const stone = player.ownedStones[idx];
+  if (!stone) return;
+
+  // Find first empty slot
+  const emptySlot = player.gauntlet.findIndex(s => s === null);
+  if (emptySlot >= 0) {
+    player.gauntlet[emptySlot] = stone;
+    if (!player.activeStones.includes(stone)) {
+      player.activeStones.push(stone);
+    }
+    updateGauntletUI();
+  }
+}
+
+function unequipStone(slotIdx) {
+  const stone = player.gauntlet[slotIdx];
+  if (stone) {
+    player.gauntlet[slotIdx] = null;
+    const idx = player.activeStones.indexOf(stone);
+    if (idx >= 0) {
+      player.activeStones.splice(idx, 1);
+    }
+    updateGauntletUI();
+  }
+}
+
+function updateTurnBattleUI() {
+  if (!turnBattle || !turnBattle.active || !echo) {
+    document.getElementById('turn-battle-ui').classList.remove('active');
+    return;
+  }
+
+  document.getElementById('turn-battle-ui').classList.add('active');
+
+  // Update HP bars and text
+  const playerHPPercent = (player.hp / player.maxHp) * 100;
+  const echoHPPercent = (echo.hp / echo.maxHp) * 100;
+
+  document.getElementById('player-hp-bar').style.width = `${playerHPPercent}%`;
+  document.getElementById('echo-hp-bar').style.width = `${echoHPPercent}%`;
+  document.getElementById('player-hp-text').textContent = `${player.hp}/${player.maxHp}`;
+  document.getElementById('echo-hp-text').textContent = `${echo.hp}/${echo.maxHp}`;
+  document.getElementById('echo-name').textContent = `Echo v${echo.version}.${echo.minor}`;
+
+  // Update turn status
+  if (turnBattle.playerTurn) {
+    document.getElementById('battle-status').textContent = 'Your Turn — Choose an action';
+    document.querySelectorAll('.battle-btn').forEach(btn => btn.disabled = false);
+  } else {
+    document.getElementById('battle-status').textContent = 'Echo\'s Turn...';
+    document.querySelectorAll('.battle-btn').forEach(btn => btn.disabled = true);
+  }
+}
+
+function turnBattleAction(action) {
+  if (!turnBattle || !turnBattle.playerTurn || !echo) return;
+
+  const world = getWorld(currentBranch);
+
+  if (action === 'attack') {
+    echo.hp -= player.power;
+    if (echo.hp <= 0) {
+      turnBattle.active = false;
+      triggerAbsorption();
+      return;
+    }
+  } else if (action === 'defend') {
+    turnBattle.defending = true;
+  } else if (action === 'stone') {
+    // Use first active stone ability
+    if (player.activeStones.length > 0) {
+      const stone = player.activeStones[0];
+      if (stone.id === 'invisibility') {
+        // Skip next echo turn
+        turnBattle.skipNextEcho = true;
+      }
+    }
+  } else if (action === 'flee') {
+    turnBattle.active = false;
+    showMsg('Fled from battle', 60);
+    return;
+  }
+
+  // Echo's turn
+  turnBattle.playerTurn = false;
+  setTimeout(() => {
+    if (!turnBattle || !turnBattle.active) return;
+
+    if (turnBattle.skipNextEcho) {
+      turnBattle.skipNextEcho = false;
+    } else {
+      // Echo attacks
+      let damage = echo.power;
+      if (turnBattle.defending) {
+        damage = Math.max(1, Math.floor(echo.power * 0.5));
+        turnBattle.defending = false;
+      }
+      player.hp -= damage;
+
+      if (player.hp <= 0) {
+        player.hp = player.maxHp;
+        turnBattle.active = false;
+        showMsg("You were defeated... respawning", 120);
+        spawnPlayer(world);
+        return;
+      }
+    }
+
+    turnBattle.playerTurn = true;
+  }, 800);
 }
 
 function showModal(modalId) {
@@ -1200,6 +1725,8 @@ function showModal(modalId) {
     updateMapUI();
   } else if (modalId === 'menu-modal') {
     updateMenuUI();
+  } else if (modalId === 'gauntlet-modal') {
+    updateGauntletModalUI();
   }
   document.getElementById(modalId).style.display = 'flex';
 }
@@ -1454,7 +1981,7 @@ function drawTiles(world) {
 }
 
 function drawCharacter(entity, traits, isEcho = false) {
-  const sx = entity.x - camera.x;
+  const sx = entity.x - camera.x + (entity.visualXOffset || 0);
   const sy = entity.y - camera.y + (entity.visualYOffset || 0);
 
   // Shadow
@@ -1462,6 +1989,11 @@ function drawCharacter(entity, traits, isEcho = false) {
   ctx.fillRect(sx - 2, sy + entity.h - 2, entity.w + 4, 4);
 
   if (!isEcho && player.invincibleTimer > 0 && Math.floor(player.invincibleTimer) % 4 < 2) return;
+
+  // Handle invisibility
+  if (!isEcho && player.invisible) {
+    ctx.globalAlpha = 0.3;
+  }
 
   // Walk cycle: legs and arms swing when moving
   const isMoving = Math.abs(entity.vx) > 0.5;
@@ -1564,6 +2096,11 @@ function drawCharacter(entity, traits, isEcho = false) {
   }
 
   ctx.restore();
+
+  // Reset invisibility alpha
+  if (!isEcho && player.invisible) {
+    ctx.globalAlpha = 1;
+  }
 
   if (isEcho) {
     const glow = 0.2 + 0.1 * Math.sin(Date.now() / 300);
@@ -1755,6 +2292,12 @@ function updateHUD() {
       }
     }
   }
+
+  // Update gauntlet UI
+  updateGauntletUI();
+
+  // Update turn-based battle UI
+  updateTurnBattleUI();
 }
 
 // ============================================================
@@ -1916,6 +2459,122 @@ function renderWorldSnapshot(branchId) {
   }
 }
 
+function handlePortalTransition() {
+  const W = canvas.width;
+  const H = canvas.height;
+  portalTransition.timer++;
+  const totalFrames = 180;
+  const progress = portalTransition.timer / totalFrames;
+
+  if (portalTransition.phase === 'zoomOut') {
+    // Phase 1: Zoom out (0-60 frames)
+    if (portalTransition.timer <= 60) {
+      const phaseProgress = portalTransition.timer / 60;
+      camera.zoom = 1 - phaseProgress * 0.7; // 1.0 to 0.3
+
+      // Vignette effect
+      ctx.save();
+      ctx.fillStyle = '#030210';
+      ctx.fillRect(0, 0, W, H);
+
+      // Render current world faded
+      const world = getWorld(currentBranch);
+      drawSky(world);
+      drawParallaxMountains(world);
+      drawTiles(world);
+      drawCharacter(player, characterTraits.player);
+      if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
+
+      // Vignette darkening
+      const vignetteGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H));
+      vignetteGrad.addColorStop(0, 'transparent');
+      vignetteGrad.addColorStop(1, `rgba(3,2,16,${phaseProgress * 0.8})`);
+      ctx.fillStyle = vignetteGrad;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    } else {
+      // Transition to slice view
+      portalTransition.phase = 'sliceView';
+      portalTransition.timer = 0;
+    }
+  } else if (portalTransition.phase === 'sliceView') {
+    // Phase 2: Show multiverse slice view (60-120 frames / 0-60 frame window)
+    if (portalTransition.timer <= 60) {
+      // Render snapshots for animation
+      const visible = getVisibleBranches();
+      visible.forEach(branch => renderWorldSnapshot(branch.id));
+
+      // Highlight target branch
+      const targetIdx = visible.findIndex(b => b.id === portalTransition.targetBranch);
+      if (targetIdx >= 0) {
+        mvSelectedIndex = targetIdx;
+      }
+
+      // Smooth scroll animation
+      mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.15;
+      mvTransition = Math.min(1, mvTransition + 0.05);
+
+      drawMultiverseView();
+    } else {
+      // Actually perform the branch change
+      currentBranch = portalTransition.targetBranch;
+      const world = getWorld(currentBranch);
+      spawnPlayer(world, true);
+
+      if (currentBranch === 'origin') {
+        echo = null;
+      } else {
+        spawnEcho(world);
+      }
+
+      camera.zoom = 0.3;
+      camera.x = player.x - W / 2;
+      camera.y = player.y - H / 2;
+
+      portalTransition.phase = 'zoomIn';
+      portalTransition.timer = 0;
+    }
+  } else if (portalTransition.phase === 'zoomIn') {
+    // Phase 3: Zoom in (120-180 frames / 0-60 frame window)
+    if (portalTransition.timer <= 60) {
+      const phaseProgress = portalTransition.timer / 60;
+      camera.zoom = 0.3 + phaseProgress * 0.7; // 0.3 to 1.0
+
+      const world = getWorld(currentBranch);
+
+      ctx.save();
+      if (camera.zoom !== 1) {
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-W / 2, -H / 2);
+      }
+
+      drawSky(world);
+      drawParallaxMountains(world);
+      drawTiles(world);
+      drawCharacter(player, characterTraits.player);
+      if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
+
+      ctx.restore();
+    } else {
+      // Transition complete
+      portalTransition = null;
+      gamePaused = false;
+      camera.zoom = 1;
+      mvTransition = 0;
+
+      if (currentBranch === 'origin') {
+        showMsg("Returning to Origin Branch", 120);
+      } else {
+        showMsg(`Entering ${getBranchName(currentBranch)}`, 120);
+      }
+    }
+  }
+
+  updateHUD();
+  requestAnimationFrame(gameLoop);
+}
+
 function drawMultiverseView() {
   mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.1;
   mvTransition = Math.min(1, mvTransition + 0.035);
@@ -1950,8 +2609,8 @@ function drawMultiverseView() {
   //   - height = full screen height
   //   - perspective skew: the far edge is slightly shorter
 
-  const EDGE_ON_ANGLE = 88;   // degrees — nearly flat (paper-thin)
-  const SELECTED_ANGLE = 72;  // degrees — still mostly sideways, just a bit more open
+  const EDGE_ON_ANGLE = 85;   // degrees — nearly edge-on
+  const SELECTED_ANGLE = 75;  // degrees — slightly more open than others
   const SLICE_GAP = 3;        // gap between slices in pixels
 
   // Only show visited branches
@@ -2171,7 +2830,7 @@ function drawMultiverseView() {
 
     ctx.restore();
 
-    // Label below
+    // Label below with defeated echo indicator
     if (alpha > 0.15 && sw > 3) {
       ctx.save();
       const labelAlpha = isSelected ? alpha : alpha * Math.max(0.2, 1 - distFromSel * 0.3);
@@ -2182,7 +2841,12 @@ function drawMultiverseView() {
       if (isSelected) {
         ctx.font = 'bold 15px sans-serif';
         ctx.fillStyle = '#e0e0ff';
-        ctx.fillText(branch.name, labelX, labelY);
+        // Show defeated echo indicator if applicable
+        if (defeatedEchoBranches.has(branch.id)) {
+          ctx.fillText(branch.name + ' ✓', labelX, labelY);
+        } else {
+          ctx.fillText(branch.name, labelX, labelY);
+        }
         ctx.font = '11px sans-serif';
         ctx.fillStyle = branch.accent;
         ctx.fillText(branch.biome, labelX, labelY + 16);
@@ -2197,7 +2861,11 @@ function drawMultiverseView() {
         // Vertical text for thin slices
         ctx.font = '10px sans-serif';
         ctx.fillStyle = `rgba(180,175,210,${labelAlpha * 0.8})`;
-        ctx.fillText(branch.name, labelX, labelY);
+        if (defeatedEchoBranches.has(branch.id)) {
+          ctx.fillText(branch.name + ' ✓', labelX, labelY);
+        } else {
+          ctx.fillText(branch.name, labelX, labelY);
+        }
       }
       ctx.restore();
     }
@@ -2246,6 +2914,13 @@ function gameLoop() {
     return;
   }
 
+  // Handle portal transition animation
+  if (portalTransition) {
+    handlePortalTransition();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   const world = getWorld(currentBranch);
 
   if (!gamePaused) {
@@ -2254,6 +2929,14 @@ function gameLoop() {
     updateEcho(world, 1);
     updateCamera();
     updateParticles();
+  }
+
+  // Apply camera zoom
+  ctx.save();
+  if (camera.zoom !== 1) {
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
   }
 
   drawSky(world);
@@ -2266,6 +2949,8 @@ function gameLoop() {
   if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
   drawBuildCursor(world);
   drawPortalLabel(world);
+
+  ctx.restore(); // end zoom
 
   updateHUD();
 

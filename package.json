@@ -1,0 +1,22 @@
+{
+  "name": "echoes-of-infinity",
+  "version": "0.7.0",
+  "description": "Echoes of Infinity - A 2D multiverse MMO",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/claytondb/echoes-of-infinity.git"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0",
+    "three": "^0.172.0"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}
