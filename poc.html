@@ -1,0 +1,2298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Echoes of Infinity — POC</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a1a; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+canvas { display: block; }
+#ui-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+#ui-overlay > * { pointer-events: auto; }
+#hud {
+  position: absolute; top: 16px; left: 16px;
+  color: #e0e0ff; font-size: 14px; line-height: 1.6;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+}
+#hud .version { font-size: 22px; font-weight: 600; color: #b8c0ff; }
+#hud .branch-name { font-size: 13px; color: #8888bb; margin-bottom: 8px; }
+#hud .stat-bar { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+#hud .bar-bg { width: 140px; height: 10px; background: rgba(0,0,0,0.5); border-radius: 5px; overflow: hidden; }
+#hud .bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+#hud .bar-hp { background: linear-gradient(90deg, #ff4466, #ff6688); }
+#hud .bar-stamina { background: linear-gradient(90deg, #44cc88, #66eebb); }
+#hud .bar-xp { background: linear-gradient(90deg, #6644ff, #aa88ff); }
+#hud .bar-label { font-size: 11px; width: 52px; color: #aaa; }
+#controls-hint {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  color: #8888bb; font-size: 12px; text-align: center;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  background: rgba(0,0,0,0.3); padding: 8px 16px; border-radius: 8px;
+}
+#hotbar {
+  position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 4px;
+}
+.hotbar-slot {
+  width: 44px; height: 44px; background: rgba(0,0,0,0.4);
+  border: 2px solid rgba(255,255,255,0.15); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 11px; color: #ccc; position: relative; cursor: pointer;
+}
+.hotbar-slot.selected { border-color: #b8c0ff; background: rgba(100,100,200,0.2); }
+.hotbar-slot .item-icon { font-size: 20px; line-height: 1; }
+.hotbar-slot .count {
+  position: absolute; bottom: 2px; right: 4px; font-size: 9px; color: #aaa;
+}
+.hotbar-slot .durability {
+  position: absolute; bottom: 0; left: 0; width: 100%; height: 2px;
+  background: rgba(0,0,0,0.3); border-radius: 6px;
+}
+.hotbar-slot .durability-fill {
+  height: 100%; background: #44cc88; border-radius: 6px; transition: width 0.2s;
+}
+#build-mode-indicator {
+  position: absolute; top: 16px; right: 16px;
+  color: #ffcc44; font-size: 14px; font-weight: 600;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  display: none;
+}
+#message-area {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #fff; font-size: 20px; font-weight: 300; text-align: center;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+  opacity: 0; transition: opacity 0.5s;
+  pointer-events: none;
+  white-space: pre-line;
+}
+#absorption-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: radial-gradient(ellipse at center, rgba(100,60,255,0.3), transparent 70%);
+  opacity: 0; transition: opacity 0.8s; pointer-events: none; z-index: 5;
+}
+#title-screen {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(180deg, #0a0a2e 0%, #1a1040 40%, #2a1555 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 100; transition: opacity 1s;
+}
+#title-screen h1 {
+  font-size: 48px; font-weight: 200; color: #c8c0ff;
+  letter-spacing: 8px; margin-bottom: 8px;
+  text-shadow: 0 0 40px rgba(150,120,255,0.4);
+}
+#title-screen .subtitle {
+  font-size: 14px; color: #6660aa; letter-spacing: 4px; margin-bottom: 60px;
+}
+#title-screen .start-btn {
+  padding: 12px 40px; background: rgba(100,80,200,0.2);
+  border: 1px solid rgba(150,130,255,0.3); border-radius: 30px;
+  color: #b8b0ff; font-size: 16px; letter-spacing: 3px; cursor: pointer;
+  transition: all 0.3s;
+}
+#title-screen .start-btn:hover {
+  background: rgba(100,80,200,0.4); border-color: rgba(150,130,255,0.6);
+}
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.7); display: none; align-items: center;
+  justify-content: center; z-index: 50; pointer-events: auto;
+}
+.modal-panel {
+  background: rgba(20,15,40,0.95); border: 1px solid rgba(150,130,255,0.3);
+  border-radius: 12px; padding: 24px; max-width: 600px; max-height: 80vh;
+  overflow-y: auto; box-shadow: 0 0 40px rgba(100,60,255,0.2);
+}
+.modal-panel h2 {
+  color: #c8c0ff; font-size: 24px; margin-bottom: 16px; border-bottom: 1px solid rgba(150,130,255,0.2); padding-bottom: 12px;
+}
+.modal-panel h3 {
+  color: #b8b0ff; font-size: 14px; margin-top: 16px; margin-bottom: 8px;
+}
+.modal-panel .row {
+  color: #aaa; font-size: 13px; margin: 8px 0; display: flex; justify-content: space-between;
+}
+.modal-close-btn {
+  position: absolute; top: 16px; right: 16px;
+  background: rgba(100,80,200,0.2); border: 1px solid rgba(150,130,255,0.3);
+  color: #b8b0ff; width: 32px; height: 32px; border-radius: 6px;
+  cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;
+}
+.modal-close-btn:hover { background: rgba(100,80,200,0.4); }
+.inventory-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px;
+}
+.inv-grid-slot {
+  width: 60px; height: 60px; background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 14px; color: #ccc; position: relative;
+}
+.inv-grid-slot .item-icon { font-size: 28px; }
+.inv-grid-slot .count {
+  position: absolute; bottom: 2px; right: 4px; font-size: 10px; color: #aaa;
+}
+.crafting-recipe {
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(150,130,255,0.2);
+  border-radius: 8px; padding: 12px; margin: 8px 0; cursor: pointer;
+  transition: all 0.2s;
+}
+.crafting-recipe:hover {
+  background: rgba(50,30,100,0.3); border-color: rgba(150,130,255,0.4);
+}
+.crafting-recipe .name { color: #b8b0ff; font-weight: 600; font-size: 14px; }
+.crafting-recipe .cost { color: #888; font-size: 12px; margin-top: 4px; }
+.crafting-recipe .result { color: #66cc88; font-size: 12px; margin-top: 4px; }
+.map-node {
+  position: absolute; width: 40px; height: 40px;
+  border: 2px solid rgba(150,130,255,0.4); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.2s; font-size: 20px;
+}
+.map-node.visited {
+  background: rgba(100,80,200,0.2); border-color: rgba(150,130,255,0.6);
+}
+.map-node.current {
+  border-color: rgba(150,200,255,0.8); box-shadow: 0 0 15px rgba(100,150,255,0.4);
+}
+.map-node.unknown {
+  background: rgba(0,0,0,0.3); border-color: rgba(100,100,100,0.4);
+}
+.map-node .label {
+  position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.8); color: #aaa; font-size: 11px; padding: 4px 8px;
+  border-radius: 4px; white-space: nowrap; opacity: 0; transition: opacity 0.2s;
+}
+.map-node:hover .label { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="title-screen">
+  <h1>ECHOES OF INFINITY</h1>
+  <div class="subtitle">MULTIVERSE POC</div>
+  <button class="start-btn" onclick="startGame()">BEGIN</button>
+</div>
+
+<div id="ui-overlay">
+  <div id="hud">
+    <div class="version" id="hud-version">Version 1.0</div>
+    <div class="branch-name" id="hud-branch">Origin Branch</div>
+    <div class="stat-bar">
+      <span class="bar-label">HP</span>
+      <div class="bar-bg"><div class="bar-fill bar-hp" id="bar-hp" style="width:100%"></div></div>
+    </div>
+    <div class="stat-bar">
+      <span class="bar-label">Stamina</span>
+      <div class="bar-bg"><div class="bar-fill bar-stamina" id="bar-stamina" style="width:100%"></div></div>
+    </div>
+    <div class="stat-bar">
+      <span class="bar-label">Resonance</span>
+      <div class="bar-bg"><div class="bar-fill bar-xp" id="bar-xp" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div id="build-mode-indicator">BUILD MODE [B]</div>
+
+  <div id="hotbar">
+    <div class="hotbar-slot selected" data-slot="0"><div class="item-icon">⚔️</div><span class="count"></span><div class="durability"><div class="durability-fill" style="width:100%"></div></div></div>
+    <div class="hotbar-slot" data-slot="1"><div class="item-icon">🪨</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="2"><div class="item-icon">🌿</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="3"><div class="item-icon">🔮</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="4"><div class="item-icon">🪵</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="5"><div class="item-icon">🔦</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="6"><div class="item-icon">⛏️</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="7"><div class="item-icon">🛠️</div><span class="count">0</span></div>
+    <div class="hotbar-slot" data-slot="8"><div class="item-icon">📦</div><span class="count">0</span></div>
+  </div>
+
+  <div id="controls-hint">
+    SPACE jump · SHIFT attack · A/D move · B build · E interact · 1-9 hotbar · C craft · I inventory · M map · L ledger · ESC menu
+  </div>
+</div>
+
+<div id="message-area"></div>
+<div id="absorption-overlay"></div>
+
+<div id="inventory-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative;">
+    <button class="modal-close-btn" onclick="closeModal('inventory-modal')">×</button>
+    <h2>Inventory</h2>
+    <div id="inventory-content"></div>
+  </div>
+</div>
+
+<div id="crafting-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative;">
+    <button class="modal-close-btn" onclick="closeModal('crafting-modal')">×</button>
+    <h2>Crafting</h2>
+    <h3 id="crafting-title">Basic Recipes</h3>
+    <div id="crafting-content"></div>
+  </div>
+</div>
+
+<div id="ledger-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative;">
+    <button class="modal-close-btn" onclick="closeModal('ledger-modal')">×</button>
+    <h2>World Ledger</h2>
+    <div id="ledger-content"></div>
+  </div>
+</div>
+
+<div id="map-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative; width: 700px; height: 500px;">
+    <button class="modal-close-btn" onclick="closeModal('map-modal')">×</button>
+    <h2>Multiverse Map</h2>
+    <div id="map-container" style="position: relative; width: 100%; height: 380px; border: 1px solid rgba(150,130,255,0.2); border-radius: 8px; margin-top: 12px; background: rgba(0,0,0,0.3);">
+    </div>
+  </div>
+</div>
+
+<div id="menu-modal" class="modal-overlay">
+  <div class="modal-panel" style="position: relative;">
+    <button class="modal-close-btn" onclick="closeModal('menu-modal')">×</button>
+    <h2>Game Menu</h2>
+    <button onclick="closeModal('menu-modal')" style="width: 100%; padding: 12px; margin-top: 16px; background: rgba(100,80,200,0.2); border: 1px solid rgba(150,130,255,0.3); color: #b8b0ff; border-radius: 6px; cursor: pointer;">Resume</button>
+
+    <h3 style="margin-top: 24px;">Player Stats</h3>
+    <div class="row"><span>HP</span><span id="menu-hp">100/100</span></div>
+    <div class="row"><span>Power</span><span id="menu-power">10</span></div>
+    <div class="row"><span>Echoes Absorbed</span><span id="menu-echoes">0</span></div>
+    <div class="row"><span>Resonance</span><span id="menu-resonance">0</span></div>
+
+    <h3>Controls</h3>
+    <div class="row"><span>SPACE</span><span>Jump</span></div>
+    <div class="row"><span>SHIFT</span><span>Attack</span></div>
+    <div class="row"><span>A/D</span><span>Move Left/Right</span></div>
+    <div class="row"><span>B</span><span>Toggle Build Mode</span></div>
+    <div class="row"><span>E</span><span>Interact</span></div>
+    <div class="row"><span>1-9</span><span>Select Hotbar Slot</span></div>
+    <div class="row"><span>C</span><span>Crafting Menu</span></div>
+    <div class="row"><span>I / Tab</span><span>Full Inventory</span></div>
+    <div class="row"><span>M</span><span>Multiverse Map</span></div>
+    <div class="row"><span>L</span><span>World Ledger</span></div>
+    <div class="row"><span>ESC</span><span>Game Menu</span></div>
+
+    <button onclick="restartGame()" style="width: 100%; padding: 12px; margin-top: 24px; background: rgba(200,80,100,0.2); border: 1px solid rgba(200,130,130,0.3); color: #ff9999; border-radius: 6px; cursor: pointer;">Restart</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const TILE = 24;
+const GRAVITY = 0.55;
+const JUMP_FORCE = -10.5;
+const MOVE_SPEED = 3.5;
+const WORLD_W = 200;
+const WORLD_H = 80;
+
+const AIR = 0, DIRT = 1, STONE = 2, GRASS = 3, PLANT = 4, CRYSTAL = 5, PORTAL = 6, WOOD = 7;
+
+const TILE_COLORS = {
+  [DIRT]:    ['#5a4030','#6b5040','#4a3525'],
+  [STONE]:   ['#556','#667','#445'],
+  [GRASS]:   ['#3a7744','#4a8855','#2a6633'],
+  [PLANT]:   ['#44aa55','#55cc66','#338844'],
+  [CRYSTAL]: ['#8855ee','#aa77ff','#6633cc'],
+  [PORTAL]:  ['#4488ff','#66aaff','#2266dd'],
+  [WOOD]:    ['#8B6914','#9B7924','#7B5904'],
+};
+
+const ITEM_NAMES = {
+  1: 'Dirt',
+  2: 'Stone',
+  3: 'Grass',
+  4: 'Plant Fiber',
+  5: 'Crystal',
+  7: 'Wood',
+  101: 'Wooden Stick',
+  102: 'Torch',
+  103: 'Workbench',
+  104: 'Stone Pickaxe',
+  105: 'Wooden Armor',
+  106: 'Stone Sword',
+  107: 'Portal Frame',
+};
+
+const ITEM_ICONS = {
+  1: '🟫',
+  2: '🪨',
+  3: '🌿',
+  4: '🌾',
+  5: '🔮',
+  7: '🪵',
+  101: '🪵',
+  102: '🔦',
+  103: '🛠️',
+  104: '⛏️',
+  105: '🛡️',
+  106: '⚔️',
+  107: '🌀',
+};
+
+const TOOL_DURABILITY = {
+  101: 100,
+  104: 150,
+  106: 120,
+};
+
+const MINING_TIMES = {
+  1: 3,
+  2: 6,
+  3: 2,
+  5: 8,
+  7: 4,
+};
+
+let gameStarted = false;
+let gamePaused = false;
+let currentBranch = 'origin';
+let buildMode = false;
+let selectedSlot = 0;
+let echoesAbsorbed = 0;
+let resonance = 0;
+let showMessage = '';
+let messageTimer = 0;
+let miningTarget = null;
+let miningProgress = 0;
+
+// Multiverse cover-flow viewer
+let multiverseViewActive = false;
+let mvSelectedIndex = 0;
+let mvScrollOffset = 0; // smooth animation target
+let mvTransition = 0; // 0-1 for open/close animation
+
+const visitedBranches = new Set(['origin']); // origin is always visited
+
+const ALL_BRANCHES = [
+  { id: 'origin', name: 'Origin Branch', biome: 'Balanced', skyTop: '#0a0a2e', skyMid: '#1a2050', skyBottom: '#2a3060', accent: '#6080cc', discovered: true },
+  { id: 'wild1', name: 'Crimson Dusk', biome: 'Volcanic', skyTop: '#1a0520', skyMid: '#3a1535', skyBottom: '#4a2040', accent: '#cc5577', discovered: true },
+  { id: 'wild2', name: 'Emerald Deep', biome: 'Aquatic', skyTop: '#001a1a', skyMid: '#002828', skyBottom: '#003838', accent: '#44bb88', discovered: true },
+  { id: 'wild3', name: 'Obsidian Void', biome: 'Void', skyTop: '#2a1a0a', skyMid: '#3a2515', skyBottom: '#4a3020', accent: '#cc9944', discovered: true },
+  { id: 'unknown1', name: '???', biome: '???', skyTop: '#111', skyMid: '#181818', skyBottom: '#222', accent: '#444', discovered: false },
+  { id: 'unknown2', name: '???', biome: '???', skyTop: '#111', skyMid: '#181818', skyBottom: '#222', accent: '#444', discovered: false },
+  { id: 'unknown3', name: '???', biome: '???', skyTop: '#111', skyMid: '#181818', skyBottom: '#222', accent: '#444', discovered: false },
+  { id: 'unknown4', name: '???', biome: '???', skyTop: '#111', skyMid: '#181818', skyBottom: '#222', accent: '#444', discovered: false },
+];
+
+const worlds = {};
+
+function seededRandom(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+function generateNoise(width, rng) {
+  const base = [];
+  for (let i = 0; i < width; i++) base.push(rng());
+  return function(x, octaves = 4) {
+    let val = 0, amp = 1, freq = 1, max = 0;
+    for (let o = 0; o < octaves; o++) {
+      const i = Math.floor(x * freq) % width;
+      const j = (i + 1) % width;
+      const t = (x * freq) - Math.floor(x * freq);
+      const smooth = t * t * (3 - 2 * t);
+      val += amp * (base[i] * (1 - smooth) + base[j] * smooth);
+      max += amp;
+      amp *= 0.5;
+      freq *= 2;
+    }
+    return val / max;
+  };
+}
+
+function generateWorld(seed, branchType) {
+  const rng = seededRandom(seed);
+  const noise = generateNoise(WORLD_W, rng);
+  const tiles = [];
+  for (let x = 0; x < WORLD_W; x++) {
+    tiles[x] = [];
+    const h = Math.floor(noise(x * 0.05) * 20) + 30;
+    for (let y = 0; y < WORLD_H; y++) {
+      if (y < h - 5) tiles[x][y] = AIR;
+      else if (y === h - 5) tiles[x][y] = GRASS;
+      else if (y < h) tiles[x][y] = DIRT;
+      else if (y < h + 10) tiles[x][y] = rng() < 0.15 ? CRYSTAL : STONE;
+      else tiles[x][y] = STONE;
+    }
+
+    // Trees on surface (trunk only - leaves added in second pass)
+    if (rng() < 0.12) {
+      const surfaceY = Math.floor(noise(x * 0.05) * 20) + 30 - 6;
+      if (surfaceY > 2 && tiles[x][surfaceY] === AIR && surfaceY + 1 < WORLD_H && tiles[x][surfaceY + 1] !== AIR) {
+        tiles[x][surfaceY] = WOOD;
+        tiles[x][surfaceY - 1] = WOOD;
+        tiles[x][surfaceY - 2] = WOOD;
+      }
+    }
+
+    const plantY = Math.floor(noise(x * 0.05) * 20) + 30 - 6;
+    if (rng() < 0.06 && plantY >= 0 && plantY < WORLD_H && tiles[x][plantY] === AIR) {
+      tiles[x][plantY] = PLANT;
+    }
+  }
+
+  const portalX = branchType === 'origin' ? Math.floor(WORLD_W * 0.75) : Math.floor(WORLD_W * 0.2);
+  for (let py = 4; py < WORLD_H; py++) {
+    if (tiles[portalX][py] !== AIR) {
+      tiles[portalX][py - 1] = PORTAL;
+      tiles[portalX][py - 2] = PORTAL;
+      tiles[portalX][py - 3] = PORTAL;
+      break;
+    }
+  }
+
+  let skyTop, skyBottom, starColor;
+  if (branchType === 'origin') {
+    skyTop = '#0a0a2e'; skyBottom = '#2a3060';
+    starColor = 'rgba(200,200,255,0.6)';
+  } else if (branchType === 'wild1') {
+    skyTop = '#1a0520'; skyBottom = '#4a2040';
+    starColor = 'rgba(255,150,200,0.5)';
+  } else if (branchType === 'wild2') {
+    skyTop = '#001a1a'; skyBottom = '#003838';
+    starColor = 'rgba(100,255,200,0.5)';
+  } else {
+    skyTop = '#2a1a0a'; skyBottom = '#4a3020';
+    starColor = 'rgba(255,200,100,0.5)';
+  }
+
+  const stars = [];
+  for (let i = 0; i < 120; i++) {
+    stars.push({ x: rng() * WORLD_W * TILE, y: rng() * canvas.height * 0.6, r: rng() * 1.5 + 0.5, b: rng() });
+  }
+
+  return { tiles, skyTop, skyBottom, starColor, stars, portalX, branchType, seed };
+}
+
+function getWorld(branchName) {
+  if (!worlds[branchName]) {
+    if (branchName === 'origin') {
+      worlds[branchName] = generateWorld(12345, 'origin');
+    } else if (branchName === 'wild1') {
+      worlds[branchName] = generateWorld(67890, 'wild1');
+    } else if (branchName === 'wild2') {
+      worlds[branchName] = generateWorld(11111, 'wild2');
+    } else {
+      worlds[branchName] = generateWorld(Math.abs(branchName.charCodeAt(0)), 'wild3');
+    }
+  }
+  return worlds[branchName];
+}
+
+const characterTraits = {
+  player: {
+    hairStyle: 'short',
+    hairColor: '#4a6b8a',
+    skinColor: '#e8d8cc',
+    shirtColor: '#4466aa',
+    pantsColor: '#3a4a6a',
+    shoeColor: '#2a2a2a',
+    beardStyle: 'none',
+    beardColor: '#333',
+    armorType: 'none',
+  },
+  echoTraits: {}
+};
+
+const player = {
+  x: 50 * TILE, y: 10 * TILE,
+  vx: 0, vy: 0,
+  w: 16, h: 28,
+  onGround: false,
+  facing: 1,
+  hp: 100, maxHp: 100,
+  stamina: 100, maxStamina: 100,
+  attackTimer: 0,
+  attackCooldown: 0,
+  power: 10,
+  inventory: {},
+  invincibleTimer: 0,
+  equippedTool: 101,
+  visualYOffset: 0, // for smooth step-up tweening
+  equippedToolDurability: 100,
+};
+
+const branchLedger = {};
+
+function spawnPlayer(world) {
+  const spawnX = world.branchType === 'origin' ? 30 : Math.floor(WORLD_W * 0.8);
+  player.x = spawnX * TILE;
+  for (let y = 0; y < WORLD_H; y++) {
+    if (world.tiles[spawnX][y] !== AIR) {
+      player.y = (y - 2) * TILE;
+      break;
+    }
+  }
+  player.vx = 0;
+  player.vy = 0;
+}
+
+let echo = null;
+
+function generateEchoTraits() {
+  const hairStyles = ['short', 'long', 'spiky', 'bald'];
+  const beardStyles = ['none', 'stubble', 'short', 'long'];
+  const colors = ['#8844aa', '#aa66cc', '#6644bb', '#7755aa', '#9955dd'];
+
+  return {
+    hairStyle: hairStyles[Math.floor(Math.random() * hairStyles.length)],
+    hairColor: colors[Math.floor(Math.random() * colors.length)],
+    skinColor: '#e8d8cc',
+    shirtColor: colors[Math.floor(Math.random() * colors.length)],
+    pantsColor: colors[Math.floor(Math.random() * colors.length)],
+    shoeColor: '#2a2a2a',
+    beardStyle: beardStyles[Math.floor(Math.random() * beardStyles.length)],
+    beardColor: colors[Math.floor(Math.random() * colors.length)],
+    armorType: 'none',
+  };
+}
+
+function spawnEcho(world) {
+  if (world.branchType === 'origin') { echo = null; return; }
+  const ex = Math.floor(WORLD_W * 0.45);
+  let ey = 0;
+  for (let y = 0; y < WORLD_H; y++) {
+    if (world.tiles[ex][y] !== AIR) { ey = (y - 2) * TILE; break; }
+  }
+  const tier = echoesAbsorbed + 1;
+  const echoId = currentBranch + '_' + tier;
+  characterTraits.echoTraits[echoId] = generateEchoTraits();
+
+  echo = {
+    x: ex * TILE, y: ey,
+    vx: 0, vy: 0,
+    w: 16, h: 28,
+    onGround: false,
+    facing: -1,
+    hp: 50 + tier * 20,
+    maxHp: 50 + tier * 20,
+    power: 8 + tier * 5,
+    attackTimer: 0,
+    attackCooldown: 0,
+    state: 'idle',
+    stateTimer: 0,
+    tier: tier,
+    version: Math.floor(tier / 10) + 1,
+    minor: tier % 10,
+    id: echoId,
+  };
+}
+
+function spawnPickupItem(world, x, y, itemId) {
+  if (!world.pickupItems) world.pickupItems = [];
+  world.pickupItems.push({
+    x: x * TILE + TILE / 2,
+    y: y * TILE,
+    vx: 0,
+    vy: -2,
+    itemId: itemId,
+    collected: false,
+  });
+}
+
+const keys = {};
+let mouseX = 0, mouseY = 0, mouseDown = false, mouseRightDown = false;
+
+window.addEventListener('keydown', e => {
+  // Let multiverse view handle its own keys before the pause gate
+  if (multiverseViewActive) {
+    const visible = getVisibleBranches();
+    if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
+      mvSelectedIndex = Math.max(0, mvSelectedIndex - 1);
+    } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
+      mvSelectedIndex = Math.min(visible.length - 1, mvSelectedIndex + 1);
+    } else if (e.key === 'Enter') {
+      const branch = visible[mvSelectedIndex];
+      if (branch && branch.id !== currentBranch) {
+        currentBranch = branch.id;
+        visitedBranches.add(currentBranch);
+        const world = getWorld(currentBranch);
+        spawnPlayer(world);
+        if (currentBranch === 'origin') { echo = null; }
+        else { spawnEcho(world); }
+        showMsg(`Traveling to ${branch.name}`, 120);
+        closeMultiverseView();
+      }
+    } else if (e.key === 'Escape' || e.key.toLowerCase() === 'm') {
+      closeMultiverseView();
+    }
+    return;
+  }
+
+  if (gamePaused && e.key !== 'Escape') return;
+  keys[e.key.toLowerCase()] = true;
+
+  if (e.key >= '1' && e.key <= '9') {
+    selectedSlot = parseInt(e.key) - 1;
+    document.querySelectorAll('.hotbar-slot').forEach((s,i) => s.classList.toggle('selected', i === selectedSlot));
+  }
+  if (e.key.toLowerCase() === 'b') {
+    buildMode = !buildMode;
+    document.getElementById('build-mode-indicator').style.display = buildMode ? 'block' : 'none';
+  }
+  if (e.key.toLowerCase() === 'e') interactWithNearby();
+  if (e.key.toLowerCase() === 'c') showModal('crafting-modal');
+  if (e.key.toLowerCase() === 'i' || e.key === 'Tab') {
+    e.preventDefault();
+    showModal('inventory-modal');
+  }
+  if (e.key.toLowerCase() === 'm') {
+    openMultiverseView();
+    return;
+  }
+  if (e.key.toLowerCase() === 'l') showModal('ledger-modal');
+  if (e.key === 'Escape') {
+    if (gamePaused) {
+      closeModal('menu-modal');
+      gamePaused = false;
+    } else {
+      gamePaused = true;
+      showModal('menu-modal');
+    }
+  }
+});
+
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+canvas.addEventListener('mousedown', e => {
+  if (e.button === 0) mouseDown = true;
+  else if (e.button === 2) mouseRightDown = true;
+  if (multiverseViewActive && e.button === 0) {
+    handleMultiverseClick(e.clientX, e.clientY);
+    return;
+  }
+  handleClick(e);
+});
+
+function handleMultiverseClick(mx, my) {
+  const visible = getVisibleBranches();
+  const sorted = [...mvSliceHitboxes].sort((a, b) => {
+    const da = Math.abs(a.offset);
+    const db = Math.abs(b.offset);
+    return da - db;
+  });
+  for (const hb of sorted) {
+    if (mx >= hb.x && mx <= hb.x + hb.w && my >= hb.y && my <= hb.y + hb.h) {
+      const branch = visible[hb.i];
+      if (!branch) continue;
+      if (hb.i === mvSelectedIndex) {
+        // Already selected — travel there
+        if (branch.id !== currentBranch) {
+          currentBranch = branch.id;
+          visitedBranches.add(currentBranch);
+          const world = getWorld(currentBranch);
+          spawnPlayer(world);
+          if (currentBranch === 'origin') { echo = null; }
+          else { spawnEcho(world); }
+          showMsg(`Traveling to ${branch.name}`, 120);
+          closeMultiverseView();
+        } else {
+          closeMultiverseView();
+        }
+      } else {
+        mvSelectedIndex = hb.i;
+      }
+      return;
+    }
+  }
+}
+canvas.addEventListener('mouseup', e => {
+  if (e.button === 0) mouseDown = false;
+  else if (e.button === 2) mouseRightDown = false;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+const camera = { x: 0, y: 0 };
+
+function updateCamera() {
+  const targetX = player.x - canvas.width / 2;
+  const targetY = player.y - canvas.height / 2;
+  camera.x += (targetX - camera.x) * 0.1;
+  camera.y += (targetY - camera.y) * 0.1;
+  camera.x = Math.max(0, Math.min(WORLD_W * TILE - canvas.width, camera.x));
+  camera.y = Math.max(-200, Math.min(WORLD_H * TILE - canvas.height, camera.y));
+}
+
+function tileAt(world, px, py) {
+  const tx = Math.floor(px / TILE);
+  const ty = Math.floor(py / TILE);
+  if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return AIR;
+  return world.tiles[tx][ty];
+}
+
+function isSolid(tile) {
+  return tile === DIRT || tile === STONE || tile === GRASS || tile === WOOD || tile === CRYSTAL;
+}
+
+function collideEntity(entity, world) {
+  const wasOnGround = entity.onGround;
+  entity.onGround = false;
+  entity.x += entity.vx;
+  let hitWall = false;
+  let wallTileX = -1, wallTileY = -1;
+  const left = Math.floor(entity.x / TILE);
+  const right = Math.floor((entity.x + entity.w) / TILE);
+  const top = Math.floor(entity.y / TILE);
+  const bot = Math.floor((entity.y + entity.h) / TILE);
+  for (let tx = left; tx <= right; tx++) {
+    for (let ty = top; ty <= bot; ty++) {
+      if (tx >= 0 && tx < WORLD_W && ty >= 0 && ty < WORLD_H && isSolid(world.tiles[tx][ty])) {
+        hitWall = true;
+        wallTileX = tx;
+        wallTileY = ty;
+        if (entity.vx > 0) entity.x = tx * TILE - entity.w - 0.01;
+        else if (entity.vx < 0) entity.x = (tx + 1) * TILE + 0.01;
+        entity.vx = 0;
+      }
+    }
+  }
+  // Auto-step: if walking on ground and hit a single-block wall, step up smoothly
+  if (hitWall && wasOnGround && entity.vx === 0 && Math.abs(entity.vy) < 1) {
+    const feetTileY = Math.floor((entity.y + entity.h) / TILE);
+    // Wall block is at feet level — check if it's only 1 block high
+    if (wallTileY >= feetTileY - 1) {
+      const aboveWall1 = wallTileY - 1;
+      const aboveWall2 = wallTileY - 2;
+      const clear1 = aboveWall1 >= 0 ? !isSolid(world.tiles[wallTileX][aboveWall1]) : true;
+      const clear2 = aboveWall2 >= 0 ? !isSolid(world.tiles[wallTileX][aboveWall2]) : true;
+      // Single block: the tile directly above the wall is air
+      if (clear1 && clear2) {
+        // Step up with visual tween
+        const oldY = entity.y;
+        entity.y = wallTileY * TILE - entity.h - 0.01;
+        if (entity.facing > 0) entity.x = wallTileX * TILE;
+        else entity.x = (wallTileX + 1) * TILE - entity.w;
+        entity.vy = 0;
+        entity.onGround = true;
+        // Set visual offset so rendering tweens smoothly
+        if (entity.visualYOffset !== undefined) {
+          entity.visualYOffset = oldY - entity.y; // positive = was lower, needs to animate up
+        }
+      }
+    }
+  }
+  entity.vy += GRAVITY;
+  if (entity.vy > 12) entity.vy = 12;
+  entity.y += entity.vy;
+  const left2 = Math.floor(entity.x / TILE);
+  const right2 = Math.floor((entity.x + entity.w) / TILE);
+  const top2 = Math.floor(entity.y / TILE);
+  const bot2 = Math.floor((entity.y + entity.h) / TILE);
+  for (let tx = left2; tx <= right2; tx++) {
+    for (let ty = top2; ty <= bot2; ty++) {
+      if (tx >= 0 && tx < WORLD_W && ty >= 0 && ty < WORLD_H && isSolid(world.tiles[tx][ty])) {
+        if (entity.vy > 0) {
+          entity.y = ty * TILE - entity.h - 0.01;
+          entity.vy = 0;
+          entity.onGround = true;
+        } else if (entity.vy < 0) {
+          entity.y = (ty + 1) * TILE + 0.01;
+          entity.vy = 0;
+        }
+      }
+    }
+  }
+}
+
+function updatePickupItems(world) {
+  if (!world.pickupItems) return;
+  for (let i = world.pickupItems.length - 1; i >= 0; i--) {
+    const item = world.pickupItems[i];
+    item.vy += 0.3;
+    if (item.vy > 5) item.vy = 5;
+    item.y += item.vy;
+
+    // Ground collision for pickup items
+    const tileBelow = Math.floor(item.y / TILE);
+    const tileX = Math.floor(item.x / TILE);
+    if (tileX >= 0 && tileX < WORLD_W && tileBelow >= 0 && tileBelow < WORLD_H && isSolid(world.tiles[tileX][tileBelow])) {
+      item.y = tileBelow * TILE - 1;
+      item.vy = 0;
+    }
+
+    const pdx = item.x - (player.x + player.w / 2);
+    const pdy = item.y - (player.y + player.h / 2);
+    const dist = Math.sqrt(pdx * pdx + pdy * pdy);
+
+    if (dist < 40) {
+      addItemToInventory(item.itemId, 1);
+      showMsg(`Picked up: ${ITEM_NAMES[item.itemId] || 'Item'}`, 60);
+      world.pickupItems.splice(i, 1);
+    }
+
+    if (item.y > WORLD_H * TILE) {
+      world.pickupItems.splice(i, 1);
+    }
+  }
+}
+
+function addItemToInventory(itemId, count) {
+  player.inventory[itemId] = (player.inventory[itemId] || 0) + count;
+}
+
+function removeItemFromInventory(itemId, count) {
+  if ((player.inventory[itemId] || 0) >= count) {
+    player.inventory[itemId] -= count;
+    return true;
+  }
+  return false;
+}
+
+function updatePlayer(world, dt) {
+  // Tween visual step-up offset toward 0 at walking speed (adjusted for ~45° angle)
+  if (player.visualYOffset !== 0) {
+    // Move toward 0 at a rate proportional to walk speed along the diagonal
+    const stepSpeed = MOVE_SPEED * 0.9; // slightly slower than horizontal walk for the climb
+    if (player.visualYOffset > 0) {
+      player.visualYOffset = Math.max(0, player.visualYOffset - stepSpeed);
+    } else {
+      player.visualYOffset = Math.min(0, player.visualYOffset + stepSpeed);
+    }
+  }
+
+  player.vx = 0;
+  if (keys['a'] || keys['arrowleft']) { player.vx = -MOVE_SPEED; player.facing = -1; }
+  if (keys['d'] || keys['arrowright']) { player.vx = MOVE_SPEED; player.facing = 1; }
+  if ((keys[' '] || keys['arrowup']) && player.onGround) {
+    player.vy = JUMP_FORCE;
+  }
+
+  if (player.attackCooldown > 0) player.attackCooldown -= dt;
+  if (keys['shift'] && player.attackCooldown <= 0 && !buildMode) {
+    player.attackTimer = 12;
+    player.attackCooldown = 25;
+    if (echo && echo.hp > 0) {
+      const dx = echo.x - player.x;
+      const dy = echo.y - player.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 60 && Math.sign(dx) === player.facing) {
+        echo.hp -= player.power;
+        echo.vx = player.facing * 5;
+        echo.vy = -3;
+        if (echo.hp <= 0) {
+          triggerAbsorption();
+        }
+      }
+    }
+  }
+  if (player.attackTimer > 0) player.attackTimer -= dt;
+
+  player.stamina = Math.min(player.maxStamina, player.stamina + 0.15);
+
+  if (player.invincibleTimer > 0) player.invincibleTimer -= dt;
+
+  collideEntity(player, world);
+  updatePickupItems(world);
+
+  // Auto-pickup plant tiles (leaves) when walking through them
+  const ptx = Math.floor((player.x + player.w / 2) / TILE);
+  const pty = Math.floor((player.y + player.h / 2) / TILE);
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const cx = ptx + dx, cy = pty + dy;
+      if (cx >= 0 && cx < WORLD_W && cy >= 0 && cy < WORLD_H) {
+        if (world.tiles[cx][cy] === PLANT) {
+          world.tiles[cx][cy] = AIR;
+          addItemToInventory(PLANT, 1);
+        }
+      }
+    }
+  }
+}
+
+function updateEcho(world, dt) {
+  if (!echo || echo.hp <= 0) return;
+  echo.stateTimer -= dt;
+  const dx = player.x - echo.x;
+  const dy = player.y - echo.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  echo.facing = dx > 0 ? 1 : -1;
+
+  if (echo.stateTimer <= 0) {
+    if (dist < 300) echo.state = 'chase';
+    else echo.state = 'idle';
+    echo.stateTimer = 30 + Math.random() * 30;
+  }
+
+  if (echo.state === 'chase') {
+    echo.vx = echo.facing * 2.2;
+    if (echo.onGround) {
+      const ahead = Math.floor((echo.x + echo.facing * 20) / TILE);
+      const feet = Math.floor((echo.y + echo.h) / TILE);
+      if (ahead >= 0 && ahead < WORLD_W && feet > 0 && isSolid(world.tiles[ahead][feet - 1])) {
+        echo.vy = JUMP_FORCE * 0.9;
+      }
+    }
+    if (dist < 50 && echo.attackCooldown <= 0) {
+      echo.attackTimer = 12;
+      echo.attackCooldown = 40;
+      if (player.invincibleTimer <= 0) {
+        player.hp -= echo.power;
+        player.vx = echo.facing * 4;
+        player.vy = -3;
+        player.invincibleTimer = 30;
+        if (player.hp <= 0) {
+          player.hp = player.maxHp;
+          showMsg("You were defeated... respawning", 120);
+          spawnPlayer(world);
+        }
+      }
+    }
+  } else {
+    echo.vx = 0;
+  }
+
+  if (echo.attackCooldown > 0) echo.attackCooldown -= dt;
+  if (echo.attackTimer > 0) echo.attackTimer -= dt;
+  collideEntity(echo, world);
+}
+
+function mixColors(c1, c2) {
+  const col1 = parseInt(c1.slice(1), 16);
+  const col2 = parseInt(c2.slice(1), 16);
+  const r = Math.round(((col1 >> 16) & 255) * 0.5 + ((col2 >> 16) & 255) * 0.5);
+  const g = Math.round(((col1 >> 8) & 255) * 0.5 + ((col2 >> 8) & 255) * 0.5);
+  const b = Math.round((col1 & 255) * 0.5 + (col2 & 255) * 0.5);
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+function triggerAbsorption() {
+  echoesAbsorbed++;
+  resonance += 25;
+  player.power += 5;
+  player.maxHp += 15;
+  player.hp = player.maxHp;
+
+  if (echo && characterTraits.echoTraits[echo.id]) {
+    const echoTraits = characterTraits.echoTraits[echo.id];
+    characterTraits.player.hairColor = mixColors(characterTraits.player.hairColor, echoTraits.hairColor);
+    characterTraits.player.shirtColor = mixColors(characterTraits.player.shirtColor, echoTraits.shirtColor);
+    characterTraits.player.pantsColor = mixColors(characterTraits.player.pantsColor, echoTraits.pantsColor);
+
+    if (characterTraits.player.beardStyle === 'none' && echoTraits.beardStyle !== 'none') {
+      characterTraits.player.beardStyle = 'stubble';
+    }
+
+    if (Math.random() < 0.2 && echoTraits.hairStyle !== characterTraits.player.hairStyle) {
+      characterTraits.player.hairStyle = echoTraits.hairStyle;
+    }
+  }
+
+  recordBranchCompletion();
+
+  document.getElementById('absorption-overlay').style.opacity = '1';
+  setTimeout(() => document.getElementById('absorption-overlay').style.opacity = '0', 1500);
+
+  showMsg(`Echo Absorbed — Version ${echo.version}.${echo.minor}\n+5 Power · +15 HP · +25 Resonance`, 180);
+}
+
+function recordBranchCompletion() {
+  if (!branchLedger[currentBranch]) {
+    branchLedger[currentBranch] = {
+      name: getBranchName(currentBranch),
+      biome: getBranchBiome(currentBranch),
+      visited: new Date().toLocaleString(),
+      echoDefeated: echo ? {
+        version: echo.version,
+        minor: echo.minor,
+        power: echo.power,
+      } : null,
+      absorbed: {
+        power: 5,
+        hp: 15,
+        resonance: 25,
+      }
+    };
+  }
+}
+
+function getBranchName(branch) {
+  const names = {
+    origin: 'Origin Branch',
+    wild1: 'Crimson Dusk',
+    wild2: 'Emerald Deep',
+    wild3: 'Obsidian Void'
+  };
+  return names[branch] || branch;
+}
+
+function getBranchBiome(branch) {
+  const biomes = {
+    origin: 'Balanced',
+    wild1: 'Volcanic',
+    wild2: 'Aquatic',
+    wild3: 'Void'
+  };
+  return biomes[branch] || 'Unknown';
+}
+
+function handleClick(e) {
+  if (!gameStarted || gamePaused) return;
+  const world = getWorld(currentBranch);
+  const wx = Math.floor((mouseX + camera.x) / TILE);
+  const wy = Math.floor((mouseY + camera.y) / TILE);
+  if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return;
+
+  const pdx = wx * TILE - player.x;
+  const pdy = wy * TILE - player.y;
+  if (Math.sqrt(pdx*pdx + pdy*pdy) > TILE * 6) return;
+
+  if (buildMode) {
+    if (e.button === 0) {
+      const slotItemId = getHotbarItemId(selectedSlot);
+      if (slotItemId && !TOOL_DURABILITY[slotItemId]) {
+        if (removeItemFromInventory(slotItemId, 1) && world.tiles[wx][wy] === AIR) {
+          world.tiles[wx][wy] = slotItemId <= 7 ? slotItemId : DIRT;
+        }
+      }
+    } else if (e.button === 2) {
+      const t = world.tiles[wx][wy];
+      if (isSolid(t)) {
+        addItemToInventory(t, 1);
+        world.tiles[wx][wy] = AIR;
+      }
+    }
+  } else {
+    if (e.button === 0) {
+      miningTarget = { x: wx, y: wy };
+      miningProgress = 0;
+    }
+  }
+}
+
+function doMining(world, dt) {
+  // If mouse is held but no target, try to acquire one from cursor position
+  if (!miningTarget && mouseDown && !buildMode && !multiverseViewActive) {
+    const wx = Math.floor((mouseX + camera.x) / TILE);
+    const wy = Math.floor((mouseY + camera.y) / TILE);
+    if (wx >= 0 && wx < WORLD_W && wy >= 0 && wy < WORLD_H && isSolid(world.tiles[wx][wy])) {
+      const pdx = wx * TILE - player.x;
+      const pdy = wy * TILE - player.y;
+      if (Math.sqrt(pdx * pdx + pdy * pdy) <= TILE * 6) {
+        miningTarget = { x: wx, y: wy };
+        miningProgress = 0;
+      }
+    }
+  }
+
+  if (!miningTarget) return;
+  if (!mouseDown) { miningTarget = null; miningProgress = 0; return; }
+  if (miningTarget.x < 0 || miningTarget.x >= WORLD_W || miningTarget.y < 0 || miningTarget.y >= WORLD_H) { miningTarget = null; return; }
+
+  const t = world.tiles[miningTarget.x][miningTarget.y];
+  if (!isSolid(t)) {
+    // Block was already broken — try to retarget the cursor
+    miningTarget = null;
+    miningProgress = 0;
+    return;
+  }
+
+  const pdx = miningTarget.x * TILE - player.x;
+  const pdy = miningTarget.y * TILE - player.y;
+  if (Math.sqrt(pdx*pdx + pdy*pdy) > TILE * 6) {
+    miningTarget = null;
+    miningProgress = 0;
+    return;
+  }
+
+  // Update target to follow cursor if it moved to a different block
+  const curWx = Math.floor((mouseX + camera.x) / TILE);
+  const curWy = Math.floor((mouseY + camera.y) / TILE);
+  if (curWx !== miningTarget.x || curWy !== miningTarget.y) {
+    miningTarget = { x: curWx, y: curWy };
+    miningProgress = 0;
+    return;
+  }
+
+  const toolMultiplier = player.equippedTool === 104 ? 1.5 : 1;
+  miningProgress += dt * toolMultiplier;
+
+  const timeToMine = MINING_TIMES[t] || 5;
+  if (miningProgress >= timeToMine) {
+    addItemToInventory(t, 1);
+    world.tiles[miningTarget.x][miningTarget.y] = AIR;
+
+    if (player.equippedTool && TOOL_DURABILITY[player.equippedTool]) {
+      player.equippedToolDurability -= 1;
+      if (player.equippedToolDurability <= 0) {
+        removeItemFromInventory(player.equippedTool, 1);
+        player.equippedTool = null;
+      }
+    }
+
+    // Reset progress but keep mining — will auto-retarget next frame
+    miningProgress = 0;
+    miningTarget = null;
+  }
+}
+
+function interactWithNearby() {
+  const world = getWorld(currentBranch);
+  const ptx = Math.floor((player.x + player.w/2) / TILE);
+  const pty = Math.floor((player.y + player.h/2) / TILE);
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -3; dy <= 1; dy++) {
+      const cx = ptx + dx, cy = pty + dy;
+      if (cx >= 0 && cx < WORLD_W && cy >= 0 && cy < WORLD_H) {
+        if (world.tiles[cx][cy] === PORTAL) {
+          travelToBranch();
+          return;
+        }
+      }
+    }
+  }
+}
+
+function travelToBranch() {
+  const branches = ['origin', 'wild1', 'wild2', 'wild3'];
+  const currentIdx = branches.indexOf(currentBranch);
+  const nextIdx = (currentIdx + 1) % branches.length;
+  currentBranch = branches[nextIdx];
+  visitedBranches.add(currentBranch);
+
+  const world = getWorld(currentBranch);
+  spawnPlayer(world);
+
+  if (currentBranch === 'origin') {
+    echo = null;
+    showMsg("Returning to Origin Branch", 120);
+  } else {
+    spawnEcho(world);
+    showMsg(`Entering ${getBranchName(currentBranch)}`, 120);
+  }
+}
+
+function showMsg(text, duration) {
+  showMessage = text;
+  messageTimer = duration;
+  const el = document.getElementById('message-area');
+  el.textContent = text;
+  el.style.opacity = '1';
+  setTimeout(() => el.style.opacity = '0', duration * 16);
+}
+
+function showModal(modalId) {
+  if (modalId === 'crafting-modal') {
+    updateCraftingUI();
+  } else if (modalId === 'inventory-modal') {
+    updateInventoryUI();
+  } else if (modalId === 'ledger-modal') {
+    updateLedgerUI();
+  } else if (modalId === 'map-modal') {
+    updateMapUI();
+  } else if (modalId === 'menu-modal') {
+    updateMenuUI();
+  }
+  document.getElementById(modalId).style.display = 'flex';
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).style.display = 'none';
+}
+
+function updateInventoryUI() {
+  let html = '';
+  for (let itemId in player.inventory) {
+    itemId = parseInt(itemId);
+    const count = player.inventory[itemId];
+    if (count > 0) {
+      const icon = ITEM_ICONS[itemId] || '?';
+      const name = ITEM_NAMES[itemId] || 'Unknown';
+      html += `<div class="inv-grid-slot"><div class="item-icon">${icon}</div><span class="count">${count}</span><div style="font-size: 10px; color: #aaa;">${name}</div></div>`;
+    }
+  }
+  document.getElementById('inventory-content').innerHTML = `<div class="inventory-grid">${html || '<div style="grid-column: 1/-1; color: #666; text-align: center; padding: 20px;">Empty</div>'}</div>`;
+}
+
+function updateCraftingUI() {
+  const recipes = [
+    { id: 101, name: 'Wooden Stick', cost: [[7, 5]], result: 'Wooden Stick' },
+    { id: 102, name: 'Torch', cost: [[7, 1], [2, 1]], result: 'Torch' },
+    { id: 103, name: 'Workbench', cost: [[7, 10], [2, 5]], result: 'Workbench' },
+    { id: 104, name: 'Stone Pickaxe', cost: [[2, 5], [7, 3]], result: 'Stone Pickaxe' },
+    { id: 105, name: 'Wooden Armor', cost: [[7, 15]], result: 'Wooden Armor' },
+    { id: 106, name: 'Stone Sword', cost: [[2, 8], [7, 2]], result: 'Stone Sword' },
+    { id: 107, name: 'Portal Frame', cost: [[5, 10], [2, 5]], result: 'Portal Frame' },
+  ];
+
+  const canCraft = (cost) => {
+    return cost.every(([itemId, amount]) => (player.inventory[itemId] || 0) >= amount);
+  };
+
+  const doCraft = (recipe) => {
+    if (canCraft(recipe.cost)) {
+      recipe.cost.forEach(([itemId, amount]) => {
+        removeItemFromInventory(itemId, amount);
+      });
+      addItemToInventory(recipe.id, 1);
+      updateCraftingUI();
+    }
+  };
+
+  let html = '';
+  recipes.forEach(recipe => {
+    const can = canCraft(recipe.cost);
+    const costStr = recipe.cost.map(([id, amt]) => `${amt}x ${ITEM_NAMES[id]}`).join(', ');
+    html += `
+      <div class="crafting-recipe" onclick="craftItem(${recipe.id})" style="opacity: ${can ? 1 : 0.5}; cursor: ${can ? 'pointer' : 'default'};">
+        <div class="name">${ITEM_ICONS[recipe.id]} ${recipe.name}</div>
+        <div class="cost">Cost: ${costStr}</div>
+        <div class="result">→ ${recipe.result}</div>
+      </div>
+    `;
+  });
+
+  document.getElementById('crafting-content').innerHTML = html;
+  window.craftItem = doCraft;
+}
+
+function craftItem(itemId) {
+  const recipes = [
+    { id: 101, cost: [[7, 5]] },
+    { id: 102, cost: [[7, 1], [2, 1]] },
+    { id: 103, cost: [[7, 10], [2, 5]] },
+    { id: 104, cost: [[2, 5], [7, 3]] },
+    { id: 105, cost: [[7, 15]] },
+    { id: 106, cost: [[2, 8], [7, 2]] },
+    { id: 107, cost: [[5, 10], [2, 5]] },
+  ];
+
+  const recipe = recipes.find(r => r.id === itemId);
+  if (recipe) {
+    const canCraft = recipe.cost.every(([id, amt]) => (player.inventory[id] || 0) >= amt);
+    if (canCraft) {
+      recipe.cost.forEach(([id, amt]) => removeItemFromInventory(id, amt));
+      addItemToInventory(itemId, 1);
+      updateCraftingUI();
+      showMsg(`Crafted: ${ITEM_NAMES[itemId]}`, 60);
+    }
+  }
+}
+
+function updateLedgerUI() {
+  let html = '';
+  if (Object.keys(branchLedger).length === 0) {
+    html = '<div style="color: #666; text-align: center; padding: 20px;">No branches visited yet.</div>';
+  } else {
+    for (let branchId in branchLedger) {
+      const entry = branchLedger[branchId];
+      html += `
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(150,130,255,0.2); border-radius: 8px; padding: 12px; margin: 8px 0;">
+          <div class="row"><span style="color: #b8b0ff; font-weight: 600;">${entry.name}</span><span style="font-size: 12px; color: #888;">${entry.biome}</span></div>
+          <div class="row"><span style="font-size: 12px;">Visited:</span><span style="font-size: 12px;">${entry.visited}</span></div>
+          ${entry.echoDefeated ? `
+            <div class="row"><span style="font-size: 12px;">Echo Defeated:</span><span style="font-size: 12px;">v${entry.echoDefeated.version}.${entry.echoDefeated.minor}</span></div>
+            <div style="margin-top: 8px; color: #66cc88;">Absorbed: +${entry.absorbed.power} Power, +${entry.absorbed.hp} HP, +${entry.absorbed.resonance} Resonance</div>
+          ` : '<div style="color: #888;">Echo not yet defeated</div>'}
+        </div>
+      `;
+    }
+  }
+  document.getElementById('ledger-content').innerHTML = html;
+}
+
+function updateMapUI() {
+  const container = document.getElementById('map-container');
+  const branches = ['origin', 'wild1', 'wild2', 'wild3'];
+  const visited = new Set(Object.keys(branchLedger));
+
+  let svg = `<svg style="width: 100%; height: 100%; position: absolute;" xmlns="http://www.w3.org/2000/svg">`;
+
+  const positions = {
+    origin: { x: 350, y: 190 },
+    wild1: { x: 550, y: 120 },
+    wild2: { x: 200, y: 250 },
+    wild3: { x: 550, y: 270 },
+  };
+
+  branches.forEach((branch, i) => {
+    if (i > 0) {
+      const from = positions.origin;
+      const to = positions[branch];
+      svg += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="rgba(150,130,255,0.2)" stroke-width="2" />`;
+    }
+  });
+
+  svg += '</svg>';
+
+  let html = svg;
+  branches.forEach(branch => {
+    const pos = positions[branch];
+    const isVisited = visited.has(branch);
+    const isCurrent = branch === currentBranch;
+    const isUnknown = !isVisited && branch !== 'origin';
+
+    const className = isCurrent ? 'current' : isVisited ? 'visited' : isUnknown ? 'unknown' : '';
+    const icon = isUnknown ? '?' : '⭐';
+
+    html += `
+      <div class="map-node ${className}" style="left: ${pos.x - 20}px; top: ${pos.y - 20}px;">
+        ${icon}
+        <div class="label">${isUnknown ? 'Unknown' : getBranchName(branch)}</div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function updateMenuUI() {
+  document.getElementById('menu-hp').textContent = `${Math.round(player.hp)}/${player.maxHp}`;
+  document.getElementById('menu-power').textContent = player.power;
+  document.getElementById('menu-echoes').textContent = echoesAbsorbed;
+  document.getElementById('menu-resonance').textContent = resonance;
+}
+
+function restartGame() {
+  location.reload();
+}
+
+function getHotbarItemId(slot) {
+  const mapping = [0, STONE, PLANT, CRYSTAL, WOOD, 102, 104, 103, 107];
+  return mapping[slot];
+}
+
+function drawSky(world) {
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, world.skyTop);
+  grad.addColorStop(1, world.skyBottom);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const time = Date.now() / 1000;
+  world.stars.forEach(s => {
+    const sx = (s.x - camera.x * 0.3) % (canvas.width + 100);
+    const twinkle = 0.5 + 0.5 * Math.sin(time * 2 + s.b * 10);
+    ctx.beginPath();
+    ctx.arc(sx, s.y, s.r * twinkle, 0, Math.PI * 2);
+    ctx.fillStyle = world.starColor;
+    ctx.fill();
+  });
+
+  const horizonY = canvas.height * 0.5;
+  const glowGrad = ctx.createRadialGradient(canvas.width / 2, horizonY + 100, 0, canvas.width / 2, horizonY + 100, canvas.width * 0.6);
+  if (world.branchType === 'origin') {
+    glowGrad.addColorStop(0, 'rgba(60,80,150,0.15)');
+  } else if (world.branchType === 'wild1') {
+    glowGrad.addColorStop(0, 'rgba(150,50,80,0.2)');
+  } else {
+    glowGrad.addColorStop(0, 'rgba(50,150,100,0.15)');
+  }
+  glowGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawTiles(world) {
+  const startX = Math.max(0, Math.floor(camera.x / TILE));
+  const endX = Math.min(WORLD_W, Math.ceil((camera.x + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camera.y / TILE));
+  const endY = Math.min(WORLD_H, Math.ceil((camera.y + canvas.height) / TILE) + 1);
+
+  for (let tx = startX; tx < endX; tx++) {
+    for (let ty = startY; ty < endY; ty++) {
+      const t = world.tiles[tx][ty];
+      if (t === AIR) continue;
+      const sx = tx * TILE - camera.x;
+      const sy = ty * TILE - camera.y;
+
+      if (t === PORTAL) {
+        const time = Date.now() / 1000;
+        const pulse = 0.7 + 0.3 * Math.sin(time * 3 + ty * 0.5);
+        ctx.fillStyle = `rgba(68,136,255,${pulse * 0.8})`;
+        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillStyle = `rgba(150,200,255,${pulse * 0.3})`;
+        ctx.fillRect(sx - 2, sy, TILE + 4, TILE);
+        for (let p = 0; p < 3; p++) {
+          const py = sy + Math.sin(time * 4 + p * 2) * 8;
+          const px = sx + TILE / 2 + Math.cos(time * 3 + p * 2.5) * 6;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(200,220,255,${0.5 + 0.5 * Math.sin(time * 5 + p)})`;
+          ctx.fill();
+        }
+      } else if (t === PLANT) {
+        // Draw as a leaf emoji floating above the ground
+        const bob = Math.sin(Date.now() / 500 + tx * 3) * 2;
+        ctx.font = `${TILE - 4}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🌿', sx + TILE / 2, sy + TILE / 2 + bob);
+      } else {
+        const colors = TILE_COLORS[t];
+        const ci = ((tx * 7 + ty * 13) % 3);
+        ctx.fillStyle = colors[ci];
+        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        ctx.fillRect(sx, sy + TILE - 2, TILE, 2);
+        if (t === CRYSTAL) {
+          const shimmer = 0.3 + 0.3 * Math.sin(Date.now() / 400 + tx + ty);
+          ctx.fillStyle = `rgba(200,180,255,${shimmer})`;
+          ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+        }
+      }
+    }
+  }
+}
+
+function drawCharacter(entity, traits, isEcho = false) {
+  const sx = entity.x - camera.x;
+  const sy = entity.y - camera.y + (entity.visualYOffset || 0);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fillRect(sx - 2, sy + entity.h - 2, entity.w + 4, 4);
+
+  if (!isEcho && player.invincibleTimer > 0 && Math.floor(player.invincibleTimer) % 4 < 2) return;
+
+  // Walk cycle: legs and arms swing when moving
+  const isMoving = Math.abs(entity.vx) > 0.5;
+  const walkCycle = isMoving ? Math.sin(Date.now() / 100 * 1.5) : 0;
+  const legSwing = walkCycle * 4; // leg offset in pixels
+  const armSwing = -walkCycle * 3; // arms swing opposite to legs
+
+  ctx.save();
+  // Flip for facing direction
+  if (entity.facing === -1) {
+    ctx.scale(-1, 1);
+    ctx.translate(-(sx * 2 + entity.w), 0);
+  }
+
+  // -- LEGS (behind body) --
+  ctx.fillStyle = traits.pantsColor;
+  // Left leg
+  ctx.fillRect(sx + 3, sy + 19 + legSwing, 4, 6);
+  // Right leg
+  ctx.fillRect(sx + 9, sy + 19 - legSwing, 4, 6);
+
+  // -- SHOES --
+  ctx.fillStyle = traits.shoeColor;
+  ctx.fillRect(sx + 2, sy + 25 + legSwing, 5, 3);
+  ctx.fillRect(sx + 9, sy + 25 - legSwing, 5, 3);
+
+  // -- BODY / SHIRT --
+  ctx.fillStyle = traits.shirtColor;
+  ctx.fillRect(sx + 2, sy + 10, entity.w - 4, 9);
+
+  // -- ARMS --
+  ctx.fillStyle = traits.skinColor;
+  // Back arm
+  ctx.fillRect(sx + 0, sy + 11 + armSwing, 3, 7);
+  // Front arm
+  ctx.fillRect(sx + 13, sy + 11 - armSwing, 3, 7);
+
+  // -- HEAD --
+  ctx.fillStyle = traits.skinColor;
+  ctx.beginPath();
+  ctx.arc(sx + entity.w / 2, sy + 6, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // -- HAIR --
+  if (traits.hairStyle === 'short') {
+    ctx.fillStyle = traits.hairColor;
+    ctx.fillRect(sx + 2, sy + 0, entity.w - 4, 5);
+  } else if (traits.hairStyle === 'long') {
+    ctx.fillStyle = traits.hairColor;
+    ctx.fillRect(sx + 2, sy + 0, entity.w - 4, 8);
+    ctx.fillRect(sx + 1, sy + 5, 3, 5); // side hair
+  } else if (traits.hairStyle === 'spiky') {
+    ctx.fillStyle = traits.hairColor;
+    for (let i = 0; i < 3; i++) {
+      ctx.fillRect(sx + 3 + i * 4, sy - 3, 3, 5);
+    }
+  }
+
+  // -- BEARD --
+  if (traits.beardStyle !== 'none') {
+    ctx.fillStyle = traits.beardColor;
+    const beardY = sy + 9;
+    if (traits.beardStyle === 'stubble') {
+      ctx.fillRect(sx + 4, beardY, 2, 1);
+      ctx.fillRect(sx + 10, beardY, 2, 1);
+    } else if (traits.beardStyle === 'short') {
+      ctx.fillRect(sx + 3, beardY, 10, 3);
+    } else if (traits.beardStyle === 'long') {
+      ctx.fillRect(sx + 3, beardY, 10, 5);
+    }
+  }
+
+  // -- EYES (facing forward, shifted slightly toward facing direction) --
+  ctx.fillStyle = isEcho ? '#ff44ff' : '#335';
+  ctx.fillRect(sx + 6, sy + 4, 2, 2);
+  ctx.fillRect(sx + 9, sy + 4, 2, 2);
+
+  // -- ARMOR OVERLAY --
+  if (traits.armorType !== 'none') {
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = traits.armorType === 'wood' ? '#8B7914' :
+                    traits.armorType === 'stone' ? '#778' :
+                    traits.armorType === 'crystal' ? '#9966ee' : '#666';
+    ctx.fillRect(sx + 2, sy + 10, entity.w - 4, 9);
+    ctx.globalAlpha = 1;
+  }
+
+  // -- ATTACK SWING --
+  if (entity.attackTimer > 0) {
+    const swingProgress = entity.attackTimer / 12;
+    const swingAngle = (1 - swingProgress) * Math.PI * 0.8;
+    const armX = sx + entity.w / 2 + 12 * Math.cos(swingAngle);
+    const armY = sy + 12 - 10 * Math.sin(swingAngle);
+    ctx.strokeStyle = isEcho ? '#cc66ff' : '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx + 13, sy + 14);
+    ctx.lineTo(armX, armY);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  if (isEcho) {
+    const glow = 0.2 + 0.1 * Math.sin(Date.now() / 300);
+    ctx.shadowColor = '#aa44ff';
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = `rgba(170,100,255,${glow})`;
+    ctx.fillRect(sx - 3, sy - 3, entity.w + 6, entity.h + 6);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = '#ddc0ff';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`v${entity.version}.${entity.minor}`, sx + entity.w / 2, sy - 8);
+  }
+
+  if (isEcho && echo.hp < echo.maxHp) {
+    const barW = 30;
+    const barH = 4;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(sx + entity.w / 2 - barW / 2, sy - 18, barW, barH);
+    ctx.fillStyle = '#ff4466';
+    ctx.fillRect(sx + entity.w / 2 - barW / 2, sy - 18, barW * (echo.hp / echo.maxHp), barH);
+  }
+}
+
+function drawPickupItems(world) {
+  if (!world.pickupItems) return;
+  world.pickupItems.forEach(item => {
+    const sx = item.x - camera.x;
+    const sy = item.y - camera.y;
+    const bob = Math.sin(Date.now() / 300 + item.x) * 2;
+    const icon = ITEM_ICONS[item.itemId] || '?';
+    ctx.fillStyle = 'rgba(255,255,100,0.3)';
+    ctx.fillRect(sx - 8, sy - 8 + bob, 16, 16);
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icon, sx, sy + bob);
+  });
+}
+
+function drawMiningProgress(world) {
+  if (!miningTarget) return;
+  const sx = miningTarget.x * TILE - camera.x;
+  const sy = miningTarget.y * TILE - camera.y;
+  const timeToMine = MINING_TIMES[world.tiles[miningTarget.x][miningTarget.y]] || 5;
+  const progress = Math.min(1, miningProgress / timeToMine);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(sx, sy + TILE + 4, TILE, 4);
+  ctx.fillStyle = '#ffcc44';
+  ctx.fillRect(sx, sy + TILE + 4, TILE * progress, 4);
+}
+
+function drawBuildCursor(world) {
+  if (!buildMode) return;
+  const wx = Math.floor((mouseX + camera.x) / TILE);
+  const wy = Math.floor((mouseY + camera.y) / TILE);
+  const sx = wx * TILE - camera.x;
+  const sy = wy * TILE - camera.y;
+  ctx.strokeStyle = 'rgba(255,255,100,0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(sx, sy, TILE, TILE);
+}
+
+function drawParallaxMountains(world) {
+  const baseY = canvas.height * 0.55;
+  ctx.fillStyle = world.branchType === 'origin' ? 'rgba(30,30,60,0.5)' :
+                  world.branchType === 'wild1' ? 'rgba(60,20,40,0.5)' : 'rgba(20,50,40,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY);
+  for (let x = 0; x <= canvas.width; x += 4) {
+    const wx = x + camera.x * 0.1;
+    const h = Math.sin(wx * 0.003) * 60 + Math.sin(wx * 0.008) * 30 + Math.cos(wx * 0.001) * 40;
+    ctx.lineTo(x, baseY - h - 40);
+  }
+  ctx.lineTo(canvas.width, canvas.height);
+  ctx.lineTo(0, canvas.height);
+  ctx.fill();
+
+  ctx.fillStyle = world.branchType === 'origin' ? 'rgba(20,20,45,0.6)' :
+                  world.branchType === 'wild1' ? 'rgba(45,15,30,0.6)' : 'rgba(15,35,30,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(0, baseY + 40);
+  for (let x = 0; x <= canvas.width; x += 4) {
+    const wx = x + camera.x * 0.2;
+    const h = Math.sin(wx * 0.005) * 40 + Math.sin(wx * 0.012) * 25;
+    ctx.lineTo(x, baseY - h + 20);
+  }
+  ctx.lineTo(canvas.width, canvas.height);
+  ctx.lineTo(0, canvas.height);
+  ctx.fill();
+}
+
+function drawPortalLabel(world) {
+  const ptx = Math.floor((player.x + player.w/2) / TILE);
+  const pty = Math.floor((player.y + player.h/2) / TILE);
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -3; dy <= 1; dy++) {
+      const cx = ptx + dx, cy = pty + dy;
+      if (cx >= 0 && cx < WORLD_W && cy >= 0 && cy < WORLD_H) {
+        if (world.tiles[cx][cy] === PORTAL) {
+          const sx = cx * TILE - camera.x;
+          const sy = cy * TILE - camera.y - 30;
+          ctx.fillStyle = 'rgba(200,220,255,0.8)';
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Press E to travel', sx + TILE / 2, sy);
+          const branches = ['origin', 'wild1', 'wild2', 'wild3'];
+          const idx = branches.indexOf(currentBranch);
+          const nextBranch = branches[(idx + 1) % branches.length];
+          ctx.fillStyle = 'rgba(150,170,255,0.6)';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(`→ ${getBranchName(nextBranch)}`, sx + TILE / 2, sy + 14);
+          return;
+        }
+      }
+    }
+  }
+}
+
+const particles = [];
+
+function updateParticles() {
+  if (Math.random() < 0.15) {
+    particles.push({
+      x: camera.x + Math.random() * canvas.width,
+      y: camera.y + Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: -Math.random() * 0.5 - 0.1,
+      life: 200 + Math.random() * 200,
+      maxLife: 200 + Math.random() * 200,
+      size: Math.random() * 2 + 0.5,
+    });
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles(world) {
+  particles.forEach(p => {
+    const sx = p.x - camera.x;
+    const sy = p.y - camera.y;
+    const alpha = (p.life / p.maxLife) * 0.4;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
+    if (world.branchType === 'origin') ctx.fillStyle = `rgba(180,200,255,${alpha})`;
+    else if (world.branchType === 'wild1') ctx.fillStyle = `rgba(255,150,180,${alpha})`;
+    else ctx.fillStyle = `rgba(150,255,200,${alpha})`;
+    ctx.fill();
+  });
+}
+
+function updateHUD() {
+  document.getElementById('bar-hp').style.width = `${(player.hp / player.maxHp) * 100}%`;
+  document.getElementById('bar-stamina').style.width = `${(player.stamina / player.maxStamina) * 100}%`;
+  document.getElementById('bar-xp').style.width = `${Math.min(100, resonance / 100 * 100)}%`;
+
+  const major = Math.floor(echoesAbsorbed / 10) + 1;
+  const minor = echoesAbsorbed % 10;
+  document.getElementById('hud-version').textContent = `Version ${major}.${minor}`;
+
+  const branchNames = {
+    origin: 'Origin Branch',
+    wild1: 'Wild Branch — Crimson Dusk',
+    wild2: 'Wild Branch — Emerald Deep',
+    wild3: 'Wild Branch — Obsidian Void'
+  };
+  document.getElementById('hud-branch').textContent = branchNames[currentBranch] || currentBranch;
+
+  for (let i = 0; i < 9; i++) {
+    const itemId = getHotbarItemId(i);
+    const slot = document.querySelectorAll('.hotbar-slot')[i];
+    const count = player.inventory[itemId] || 0;
+    if (slot) {
+      const countEl = slot.querySelector('.count');
+      if (countEl) countEl.textContent = itemId && itemId !== 0 ? (TOOL_DURABILITY[itemId] ? '' : count) : '';
+
+      if (itemId && TOOL_DURABILITY[itemId] && itemId === player.equippedTool) {
+        const durabilityFill = slot.querySelector('.durability-fill');
+        if (durabilityFill) {
+          durabilityFill.style.width = `${(player.equippedToolDurability / TOOL_DURABILITY[itemId]) * 100}%`;
+        }
+      }
+    }
+  }
+}
+
+// ============================================================
+// MULTIVERSE SLICE VIEWER — edge-on sheets of glass
+// ============================================================
+
+const mvSnapshots = {};
+let mvSliceHitboxes = []; // [{i, x, w, y, h}, ...] for click detection
+
+function getVisibleBranches() {
+  return ALL_BRANCHES.filter(b => visitedBranches.has(b.id));
+}
+
+function openMultiverseView() {
+  multiverseViewActive = true;
+  gamePaused = true;
+  const visible = getVisibleBranches();
+  mvSelectedIndex = visible.findIndex(b => b.id === currentBranch);
+  if (mvSelectedIndex < 0) mvSelectedIndex = 0;
+  mvScrollOffset = mvSelectedIndex;
+  mvTransition = 0;
+  visible.forEach(branch => renderWorldSnapshot(branch.id));
+  document.getElementById('ui-overlay').style.opacity = '0';
+}
+
+function closeMultiverseView() {
+  multiverseViewActive = false;
+  gamePaused = false;
+  document.getElementById('ui-overlay').style.opacity = '1';
+}
+
+function renderWorldSnapshot(branchId) {
+  const world = getWorld(branchId);
+  // Render at the actual screen size so it looks like the real game
+  const snapW = canvas.width;
+  const snapH = canvas.height;
+  let offCanvas = mvSnapshots[branchId];
+  if (!offCanvas || offCanvas.width !== snapW || offCanvas.height !== snapH) {
+    offCanvas = document.createElement('canvas');
+    offCanvas.width = snapW;
+    offCanvas.height = snapH;
+    mvSnapshots[branchId] = offCanvas;
+  }
+  const oc = offCanvas.getContext('2d');
+
+  // Camera: use player pos for current branch, find surface for others
+  let camCenterX, camCenterY;
+  if (branchId === currentBranch) {
+    camCenterX = player.x;
+    camCenterY = player.y;
+  } else {
+    camCenterX = WORLD_W * TILE / 2;
+    camCenterY = 20 * TILE;
+    const midX = Math.floor(WORLD_W / 2);
+    for (let y = 0; y < WORLD_H; y++) {
+      if (world.tiles[midX][y] !== AIR) { camCenterY = y * TILE; break; }
+    }
+  }
+  const camX = camCenterX - snapW / 2;
+  const camY = camCenterY - snapH / 2 + 40;
+
+  // Sky
+  const skyGrad = oc.createLinearGradient(0, 0, 0, snapH);
+  skyGrad.addColorStop(0, world.skyTop);
+  skyGrad.addColorStop(1, world.skyBottom);
+  oc.fillStyle = skyGrad;
+  oc.fillRect(0, 0, snapW, snapH);
+
+  // Stars
+  world.stars.forEach(s => {
+    const sx = (s.x - camX * 0.3) % (snapW + 100);
+    if (sx > 0 && sx < snapW && s.y < snapH * 0.7) {
+      oc.beginPath();
+      oc.arc(sx, s.y, Math.max(0.3, s.r), 0, Math.PI * 2);
+      oc.fillStyle = world.starColor;
+      oc.fill();
+    }
+  });
+
+  // Horizon glow
+  const horizonY = snapH * 0.5;
+  const glowGrad = oc.createRadialGradient(snapW / 2, horizonY + 100, 0, snapW / 2, horizonY + 100, snapW * 0.6);
+  if (world.branchType === 'origin') glowGrad.addColorStop(0, 'rgba(60,80,150,0.15)');
+  else if (world.branchType === 'wild1') glowGrad.addColorStop(0, 'rgba(150,50,80,0.2)');
+  else if (world.branchType === 'wild3') glowGrad.addColorStop(0, 'rgba(120,80,30,0.15)');
+  else glowGrad.addColorStop(0, 'rgba(50,150,100,0.15)');
+  glowGrad.addColorStop(1, 'transparent');
+  oc.fillStyle = glowGrad;
+  oc.fillRect(0, 0, snapW, snapH);
+
+  // Parallax mountains
+  const baseY = snapH * 0.55;
+  const mtColor1 = world.branchType === 'origin' ? 'rgba(30,30,60,0.5)' :
+                   world.branchType === 'wild1' ? 'rgba(60,20,40,0.5)' :
+                   world.branchType === 'wild3' ? 'rgba(50,30,15,0.5)' : 'rgba(20,50,40,0.5)';
+  oc.fillStyle = mtColor1;
+  oc.beginPath();
+  oc.moveTo(0, baseY);
+  for (let x = 0; x <= snapW; x += 4) {
+    const wx = x + camX * 0.1;
+    const h = Math.sin(wx * 0.003) * 60 + Math.sin(wx * 0.008) * 30 + Math.cos(wx * 0.001) * 40;
+    oc.lineTo(x, baseY - h - 40);
+  }
+  oc.lineTo(snapW, snapH);
+  oc.lineTo(0, snapH);
+  oc.fill();
+
+  const mtColor2 = world.branchType === 'origin' ? 'rgba(20,20,45,0.6)' :
+                   world.branchType === 'wild1' ? 'rgba(45,15,30,0.6)' :
+                   world.branchType === 'wild3' ? 'rgba(35,22,10,0.6)' : 'rgba(15,35,30,0.6)';
+  oc.fillStyle = mtColor2;
+  oc.beginPath();
+  oc.moveTo(0, baseY + 40);
+  for (let x = 0; x <= snapW; x += 4) {
+    const wx = x + camX * 0.2;
+    const h = Math.sin(wx * 0.005) * 40 + Math.sin(wx * 0.012) * 25;
+    oc.lineTo(x, baseY - h + 20);
+  }
+  oc.lineTo(snapW, snapH);
+  oc.lineTo(0, snapH);
+  oc.fill();
+
+  // Tiles
+  const startX = Math.max(0, Math.floor(camX / TILE));
+  const endX = Math.min(WORLD_W, Math.ceil((camX + snapW) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camY / TILE));
+  const endY = Math.min(WORLD_H, Math.ceil((camY + snapH) / TILE) + 1);
+  for (let tx = startX; tx < endX; tx++) {
+    for (let ty = startY; ty < endY; ty++) {
+      const t = world.tiles[tx][ty];
+      if (t === AIR) continue;
+      const sx = tx * TILE - camX;
+      const sy = ty * TILE - camY;
+      if (t === PORTAL) {
+        oc.fillStyle = 'rgba(68,136,255,0.8)';
+      } else {
+        const colors = TILE_COLORS[t];
+        if (colors) oc.fillStyle = colors[((tx * 7 + ty * 13) % 3)];
+        else oc.fillStyle = '#555';
+      }
+      oc.fillRect(sx, sy, TILE, TILE);
+    }
+  }
+
+  // Player on current branch
+  if (branchId === currentBranch) {
+    const px = player.x - camX;
+    const py = player.y - camY;
+    oc.fillStyle = 'rgba(100,150,255,0.25)';
+    oc.beginPath();
+    oc.arc(px + player.w / 2, py + player.h / 2, 22, 0, Math.PI * 2);
+    oc.fill();
+    oc.fillStyle = '#4466aa';
+    oc.fillRect(px, py + 8, player.w, player.h - 8);
+    oc.fillStyle = '#e8d8cc';
+    oc.beginPath();
+    oc.arc(px + player.w / 2, py + 6, 6, 0, Math.PI * 2);
+    oc.fill();
+  }
+}
+
+function drawMultiverseView() {
+  mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.1;
+  mvTransition = Math.min(1, mvTransition + 0.035);
+
+  const W = canvas.width;
+  const H = canvas.height;
+  const time = Date.now() / 1000;
+
+  // Black void
+  ctx.fillStyle = '#030210';
+  ctx.fillRect(0, 0, W, H);
+
+  // Faint void particles
+  ctx.save();
+  ctx.globalAlpha = 0.25 * mvTransition;
+  for (let i = 0; i < 40; i++) {
+    const px = (Math.sin(time * 0.12 + i * 2.3) * 0.5 + 0.5) * W;
+    const py = (Math.cos(time * 0.09 + i * 1.8) * 0.5 + 0.5) * H;
+    ctx.beginPath();
+    ctx.arc(px, py, 0.5 + Math.abs(Math.sin(time * 0.5 + i)) * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(100,80,180,${0.15 + 0.1 * Math.abs(Math.sin(time + i))})`;
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // ---- EDGE-ON SLICES ----
+  // Each world is a full-screen-sized plane. We view them from the side.
+  // The selected slice is rotated ~30° toward the viewer so you can see the world.
+  // Non-selected slices are rotated ~85° (nearly edge-on, paper-thin).
+  // We simulate this by drawing each slice as a column strip:
+  //   - width = full screen width * cos(angle)  (thin when edge-on)
+  //   - height = full screen height
+  //   - perspective skew: the far edge is slightly shorter
+
+  const EDGE_ON_ANGLE = 88;   // degrees — nearly flat (paper-thin)
+  const SELECTED_ANGLE = 72;  // degrees — still mostly sideways, just a bit more open
+  const SLICE_GAP = 3;        // gap between slices in pixels
+
+  // Only show visited branches
+  const visible = getVisibleBranches();
+
+  const sliceInfo = [];
+  let totalW = 0;
+
+  for (let i = 0; i < visible.length; i++) {
+    const offset = i - mvScrollOffset;
+    const distFromSelected = Math.abs(offset);
+    // Smoothly interpolate angle: selected is open, others are edge-on
+    const t = Math.min(1, distFromSelected); // 0 at selected, 1+ at others
+    const smooth = t < 1 ? t * t : 1; // ease-in
+    const angleDeg = SELECTED_ANGLE + (EDGE_ON_ANGLE - SELECTED_ANGLE) * smooth;
+    const angleRad = angleDeg * Math.PI / 180;
+    const sliceW = Math.max(4, W * Math.cos(angleRad));
+    sliceInfo.push({ i, sliceW, angleDeg, angleRad, offset });
+    totalW += sliceW + SLICE_GAP;
+  }
+  totalW -= SLICE_GAP; // no gap after last
+
+  // Center the whole stack, with selected slice in the center of the screen
+  let runningX = 0;
+  for (let s = 0; s < sliceInfo.length; s++) {
+    sliceInfo[s].startX = runningX;
+    sliceInfo[s].centerX = runningX + sliceInfo[s].sliceW / 2;
+    runningX += sliceInfo[s].sliceW + SLICE_GAP;
+  }
+  // Find where the selected slice's center is, and shift everything so it's at W/2
+  const selCenter = sliceInfo[mvSelectedIndex] ? sliceInfo[mvSelectedIndex].centerX : totalW / 2;
+  // Smooth animated offset
+  const targetShift = W / 2 - selCenter;
+
+  for (const s of sliceInfo) {
+    s.startX += targetShift;
+    s.centerX += targetShift;
+  }
+
+  // Draw slices back-to-front: draw edges first, selected last
+  const drawOrder = [...sliceInfo].sort((a, b) => {
+    const da = Math.abs(a.offset);
+    const db = Math.abs(b.offset);
+    return db - da; // furthest first
+  });
+
+  mvSliceHitboxes = [];
+
+  for (const s of drawOrder) {
+    const branch = visible[s.i];
+    if (!branch) continue;
+    const snap = mvSnapshots[branch.id];
+    const isSelected = s.i === mvSelectedIndex;
+    const isCurrent = branch.id === currentBranch;
+    const distFromSel = Math.abs(s.offset);
+
+    // Perspective: the far edge (side away from camera) is slightly shorter
+    // This creates the 3D "turned page" look
+    const perspectiveAmount = Math.sin(s.angleRad) * 0.08;
+    const nearEdgeShrink = 0;
+    const farEdgeShrink = perspectiveAmount;
+
+    // Which side is the "far" side depends on which side of selected we are
+    const farIsRight = s.offset >= 0;
+
+    const x = s.startX;
+    const sw = s.sliceW;
+    const sliceH = H * 0.85;
+    const topY = (H - sliceH) / 2;
+
+    // Four corners with perspective shrink
+    const leftShrink = farIsRight ? nearEdgeShrink : farEdgeShrink;
+    const rightShrink = farIsRight ? farEdgeShrink : nearEdgeShrink;
+
+    const tl = { x: x, y: topY + sliceH * leftShrink };
+    const tr = { x: x + sw, y: topY + sliceH * rightShrink };
+    const br = { x: x + sw, y: topY + sliceH * (1 - rightShrink) };
+    const bl = { x: x, y: topY + sliceH * (1 - leftShrink) };
+
+    // Skip if fully off-screen
+    if (tr.x < -10 || tl.x > W + 10) continue;
+
+    // Store hitbox for click detection
+    mvSliceHitboxes.push({ i: s.i, x: x, w: sw, y: topY, h: sliceH, offset: s.offset });
+
+    const alpha = Math.max(0.15, 1 - distFromSel * 0.12) * mvTransition;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Clip to trapezoid
+    ctx.beginPath();
+    ctx.moveTo(tl.x, tl.y);
+    ctx.lineTo(tr.x, tr.y);
+    ctx.lineTo(br.x, br.y);
+    ctx.lineTo(bl.x, bl.y);
+    ctx.closePath();
+
+    if (snap && branch.discovered) {
+      ctx.save();
+      ctx.clip();
+      // Draw the full-resolution world snapshot squeezed into this strip
+      ctx.drawImage(snap, tl.x, topY, sw, sliceH);
+
+      // Ghost outline of player position on non-origin branches
+      if (branch.id !== 'origin' && branch.id !== currentBranch) {
+        // Show where the origin player would be in this world's view
+        // The snapshot camera is centered on the world center, so we map player pos relative to that
+        const snapCanvas = snap;
+        const world = getWorld(branch.id);
+        let worldCamX = WORLD_W * TILE / 2 - snapCanvas.width / 2;
+        let worldCamY = 20 * TILE;
+        const midX = Math.floor(WORLD_W / 2);
+        for (let y = 0; y < WORLD_H; y++) {
+          if (world.tiles[midX][y] !== AIR) { worldCamY = y * TILE - snapCanvas.height / 3; break; }
+        }
+        // Player position relative to this branch's camera
+        const ghostRelX = (player.x - worldCamX) / snapCanvas.width;
+        const ghostRelY = (player.y - worldCamY) / snapCanvas.height;
+        const ghostScreenX = tl.x + ghostRelX * sw;
+        const ghostScreenY = topY + ghostRelY * sliceH;
+        // Draw a pulsing outline silhouette
+        const pulse = 0.4 + 0.3 * Math.abs(Math.sin(time * 2));
+        ctx.strokeStyle = `rgba(100,180,255,${pulse})`;
+        ctx.lineWidth = 1.5;
+        // Head outline
+        const headR = Math.max(1.5, 4 * (sw / W));
+        const bodyW = Math.max(2, 10 * (sw / W));
+        const bodyH = Math.max(3, 18 * (sw / W));
+        ctx.beginPath();
+        ctx.arc(ghostScreenX, ghostScreenY - bodyH * 0.3, headR, 0, Math.PI * 2);
+        ctx.stroke();
+        // Body outline
+        ctx.strokeRect(ghostScreenX - bodyW / 2, ghostScreenY - bodyH * 0.1, bodyW, bodyH);
+        // Label
+        if (sw > 30) {
+          ctx.fillStyle = `rgba(100,180,255,${pulse * 0.7})`;
+          ctx.font = `${Math.max(7, 10 * (sw / W))}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.fillText('YOU', ghostScreenX, ghostScreenY - bodyH * 0.5);
+        }
+      }
+
+      // Darken distant slices
+      if (distFromSel > 0.5) {
+        ctx.fillStyle = `rgba(3,2,10,${Math.min(0.55, distFromSel * 0.12)})`;
+        ctx.fillRect(tl.x - 1, topY - 1, sw + 2, sliceH + 2);
+      }
+      ctx.restore();
+    } else {
+      // Unknown branch: dark slab
+      ctx.fillStyle = '#0a0818';
+      ctx.fill();
+      if (sw > 8) {
+        ctx.fillStyle = `rgba(80,70,130,${0.2 + 0.1 * Math.abs(Math.sin(time + s.i))})`;
+        ctx.font = `bold ${Math.min(sw * 0.6, 40)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('?', x + sw / 2, H / 2);
+      }
+    }
+
+    // Border
+    ctx.beginPath();
+    ctx.moveTo(tl.x, tl.y);
+    ctx.lineTo(tr.x, tr.y);
+    ctx.lineTo(br.x, br.y);
+    ctx.lineTo(bl.x, bl.y);
+    ctx.closePath();
+
+    if (isSelected) {
+      ctx.shadowColor = branch.accent;
+      ctx.shadowBlur = 20;
+      ctx.strokeStyle = branch.accent;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else {
+      ctx.strokeStyle = `rgba(120,110,180,${0.1 + alpha * 0.15})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    if (isCurrent && !isSelected) {
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // 3D edge strip: a thin dark band on the "thickness" side of the slice
+    const edgeThickness = Math.max(2, 5 - distFromSel * 0.5);
+    if (distFromSel > 0.15 || true) {
+      const edgeOnRight = s.offset < 0;
+      ctx.fillStyle = `rgba(25,20,45,${alpha * 0.8})`;
+      if (edgeOnRight) {
+        ctx.beginPath();
+        ctx.moveTo(tr.x, tr.y);
+        ctx.lineTo(tr.x + edgeThickness, tr.y + 3);
+        ctx.lineTo(br.x + edgeThickness, br.y - 3);
+        ctx.lineTo(br.x, br.y);
+        ctx.closePath();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(tl.x, tl.y);
+        ctx.lineTo(tl.x - edgeThickness, tl.y + 3);
+        ctx.lineTo(bl.x - edgeThickness, bl.y - 3);
+        ctx.lineTo(bl.x, bl.y);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.strokeStyle = `rgba(80,70,130,${alpha * 0.3})`;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Label below
+    if (alpha > 0.15 && sw > 3) {
+      ctx.save();
+      const labelAlpha = isSelected ? alpha : alpha * Math.max(0.2, 1 - distFromSel * 0.3);
+      ctx.globalAlpha = labelAlpha;
+      const labelX = x + sw / 2;
+      const labelY = bl.y + 16;
+      ctx.textAlign = 'center';
+      if (isSelected) {
+        ctx.font = 'bold 15px sans-serif';
+        ctx.fillStyle = '#e0e0ff';
+        ctx.fillText(branch.name, labelX, labelY);
+        ctx.font = '11px sans-serif';
+        ctx.fillStyle = branch.accent;
+        ctx.fillText(branch.biome, labelX, labelY + 16);
+        if (isCurrent) {
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.fillText('(you are here)', labelX, labelY + 30);
+        } else if (branch.discovered) {
+          ctx.fillStyle = 'rgba(150,200,255,0.5)';
+          ctx.fillText('click to travel', labelX, labelY + 30);
+        }
+      } else if (sw > 15) {
+        // Vertical text for thin slices
+        ctx.font = '10px sans-serif';
+        ctx.fillStyle = `rgba(180,175,210,${labelAlpha * 0.8})`;
+        ctx.fillText(branch.name, labelX, labelY);
+      }
+      ctx.restore();
+    }
+  }
+
+  // Title overlay at top
+  ctx.save();
+  ctx.globalAlpha = mvTransition * 0.7;
+  ctx.textAlign = 'center';
+  ctx.font = '200 20px sans-serif';
+  ctx.fillStyle = 'rgba(200,190,255,0.6)';
+  ctx.fillText('T H E   M U L T I V E R S E', W / 2, 32);
+  ctx.font = '11px sans-serif';
+  ctx.fillStyle = 'rgba(150,140,200,0.35)';
+  ctx.fillText('A / D browse  ·  click to travel  ·  M close', W / 2, 50);
+  ctx.restore();
+
+  // Version info at bottom
+  ctx.save();
+  ctx.globalAlpha = 0.4 * mvTransition;
+  ctx.textAlign = 'center';
+  ctx.font = '12px sans-serif';
+  const major = Math.floor(echoesAbsorbed / 10) + 1;
+  const minor = echoesAbsorbed % 10;
+  ctx.fillStyle = '#7777aa';
+  ctx.fillText(`Version ${major}.${minor}  ·  ${echoesAbsorbed} Echoes Absorbed  ·  ${resonance} Resonance`, W / 2, H - 16);
+  ctx.restore();
+}
+
+// ============================================================
+// MAIN GAME LOOP
+// ============================================================
+
+function gameLoop() {
+  if (!gameStarted) {
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  if (multiverseViewActive) {
+    // Re-render snapshot for current branch each frame so it's live
+    renderWorldSnapshot(currentBranch);
+    // Draw the multiverse cover-flow view
+    drawMultiverseView();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  const world = getWorld(currentBranch);
+
+  if (!gamePaused) {
+    updatePlayer(world, 1);
+    doMining(world, 1);
+    updateEcho(world, 1);
+    updateCamera();
+    updateParticles();
+  }
+
+  drawSky(world);
+  drawParallaxMountains(world);
+  drawParticles(world);
+  drawTiles(world);
+  drawPickupItems(world);
+  drawMiningProgress(world);
+  drawCharacter(player, characterTraits.player);
+  if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
+  drawBuildCursor(world);
+  drawPortalLabel(world);
+
+  updateHUD();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  document.getElementById('title-screen').style.opacity = '0';
+  setTimeout(() => document.getElementById('title-screen').style.display = 'none', 1000);
+  gameStarted = true;
+  const world = getWorld('origin');
+  spawnPlayer(world);
+  // Find ground near player spawn for the wooden stick pickup
+  const stickX = 33;
+  let stickY = 0;
+  for (let y = 0; y < WORLD_H; y++) {
+    if (world.tiles[stickX][y] !== AIR) { stickY = y - 2; break; }
+  }
+  spawnPickupItem(world, stickX, stickY, 101);
+  camera.x = player.x - canvas.width / 2;
+  camera.y = player.y - canvas.height / 2;
+  addItemToInventory(STONE, 15);
+  addItemToInventory(WOOD, 10);
+  showMsg("Welcome to your Origin Branch\nFind the Wooden Stick and explore the multiverse", 180);
+}
+
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
