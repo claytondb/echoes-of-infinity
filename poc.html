@@ -1933,88 +1933,35 @@ function drawSky(world) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ===== TILE MAP CACHING =====
-// Render tiles to an offscreen canvas; only re-render when tiles change
-const tileCache = { canvas: null, ctx: null, branchId: null, dirty: true };
-
-function invalidateTileCache() { tileCache.dirty = true; }
-
-function ensureTileCache(world) {
-  const cacheW = WORLD_W * TILE;
-  const cacheH = WORLD_H * TILE;
-  if (!tileCache.canvas || tileCache.branchId !== currentBranch) {
-    tileCache.canvas = document.createElement('canvas');
-    tileCache.canvas.width = cacheW;
-    tileCache.canvas.height = cacheH;
-    tileCache.ctx = tileCache.canvas.getContext('2d');
-    tileCache.branchId = currentBranch;
-    tileCache.dirty = true;
-  }
-  if (!tileCache.dirty) return;
-  tileCache.dirty = false;
-
-  const tc = tileCache.ctx;
-  tc.clearRect(0, 0, cacheW, cacheH);
-
-  for (let tx = 0; tx < WORLD_W; tx++) {
-    for (let ty = 0; ty < WORLD_H; ty++) {
-      const t = world.tiles[tx][ty];
-      if (t === AIR) continue;
-      const sx = tx * TILE;
-      const sy = ty * TILE;
-
-      if (t === PORTAL) {
-        tc.fillStyle = 'rgba(68,136,255,0.8)';
-        tc.fillRect(sx, sy, TILE, TILE);
-      } else if (t === PLANT) {
-        tc.fillStyle = '#44aa55';
-        tc.fillRect(sx + 6, sy + 4, TILE - 12, TILE - 6);
-        tc.fillStyle = '#55cc66';
-        tc.fillRect(sx + 8, sy + 2, TILE - 16, TILE - 8);
-      } else {
-        const colors = TILE_COLORS[t];
-        if (!colors) continue;
-        tc.fillStyle = colors[((tx * 7 + ty * 13) % 3)];
-        tc.fillRect(sx, sy, TILE, TILE);
-        // Bottom edge shadow
-        tc.fillStyle = 'rgba(0,0,0,0.1)';
-        tc.fillRect(sx, sy + TILE - 2, TILE, 2);
-        // Crystal highlight baked in
-        if (t === CRYSTAL) {
-          tc.fillStyle = 'rgba(200,180,255,0.35)';
-          tc.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-        }
-      }
-    }
-  }
-}
+function invalidateTileCache() {} // no-op, kept for compatibility
 
 function drawTiles(world) {
-  ensureTileCache(world);
-
-  // Blit the visible portion of the cached tile map
-  const sx = Math.max(0, Math.floor(camera.x));
-  const sy = Math.max(0, Math.floor(camera.y));
-  const sw = Math.min(canvas.width, WORLD_W * TILE - sx);
-  const sh = Math.min(canvas.height, WORLD_H * TILE - sy);
-  if (sw > 0 && sh > 0) {
-    ctx.drawImage(tileCache.canvas, sx, sy, sw, sh, sx - camera.x, sy - camera.y, sw, sh);
-  }
-
-  // Only animate portals (few tiles, not hundreds)
   const startX = Math.max(0, Math.floor(camera.x / TILE));
   const endX = Math.min(WORLD_W, Math.ceil((camera.x + canvas.width) / TILE) + 1);
   const startY = Math.max(0, Math.floor(camera.y / TILE));
   const endY = Math.min(WORLD_H, Math.ceil((camera.y + canvas.height) / TILE) + 1);
-  const time = Date.now() / 1000;
+
+  // Batch tiles by color to minimize fillStyle changes
+  let lastColor = '';
   for (let tx = startX; tx < endX; tx++) {
     for (let ty = startY; ty < endY; ty++) {
-      if (world.tiles[tx][ty] === PORTAL) {
-        const px = tx * TILE - camera.x;
-        const py = ty * TILE - camera.y;
-        const pulse = 0.3 + 0.3 * Math.sin(time * 3 + ty * 0.5);
-        ctx.fillStyle = `rgba(150,200,255,${pulse})`;
-        ctx.fillRect(px - 1, py, TILE + 2, TILE);
+      const t = world.tiles[tx][ty];
+      if (t === AIR) continue;
+      const sx = Math.floor(tx * TILE - camera.x);
+      const sy = Math.floor(ty * TILE - camera.y);
+
+      if (t === PORTAL) {
+        ctx.fillStyle = '#4488ff';
+        ctx.fillRect(sx, sy, TILE, TILE);
+      } else if (t === PLANT) {
+        ctx.fillStyle = '#44aa55';
+        ctx.fillRect(sx + 6, sy + 4, TILE - 12, TILE - 6);
+      } else {
+        const colors = TILE_COLORS[t];
+        if (!colors) continue;
+        const color = colors[((tx * 7 + ty * 13) % 3)];
+        if (color !== lastColor) { ctx.fillStyle = color; lastColor = color; }
+        ctx.fillRect(sx, sy, TILE, TILE);
       }
     }
   }
@@ -2377,11 +2324,10 @@ function closeMultiverseView() {
 
 function renderWorldSnapshot(branchId) {
   const world = getWorld(branchId);
-  // Render at half resolution — plenty for the thin slice view
-  const snapW = Math.floor(canvas.width / 2);
-  const snapH = Math.floor(canvas.height / 2);
+  const snapW = 200;
+  const snapH = 120;
   let offCanvas = mvSnapshots[branchId];
-  if (!offCanvas || offCanvas.width !== snapW || offCanvas.height !== snapH) {
+  if (!offCanvas) {
     offCanvas = document.createElement('canvas');
     offCanvas.width = snapW;
     offCanvas.height = snapH;
@@ -2389,119 +2335,28 @@ function renderWorldSnapshot(branchId) {
   }
   const oc = offCanvas.getContext('2d');
 
-  // Camera: use player pos for current branch, find surface for others
-  let camCenterX, camCenterY;
-  if (branchId === currentBranch) {
-    camCenterX = player.x;
-    camCenterY = player.y;
-  } else {
-    camCenterX = WORLD_W * TILE / 2;
-    camCenterY = 20 * TILE;
-    const midX = Math.floor(WORLD_W / 2);
-    for (let y = 0; y < WORLD_H; y++) {
-      if (world.tiles[midX][y] !== AIR) { camCenterY = y * TILE; break; }
-    }
-  }
-  const camX = camCenterX - snapW / 2;
-  const camY = camCenterY - snapH / 2 + 40;
-
-  // Sky
+  // Sky gradient
   const skyGrad = oc.createLinearGradient(0, 0, 0, snapH);
   skyGrad.addColorStop(0, world.skyTop);
   skyGrad.addColorStop(1, world.skyBottom);
   oc.fillStyle = skyGrad;
   oc.fillRect(0, 0, snapW, snapH);
 
-  // Stars
-  world.stars.forEach(s => {
-    const sx = (s.x - camX * 0.3) % (snapW + 100);
-    if (sx > 0 && sx < snapW && s.y < snapH * 0.7) {
-      oc.beginPath();
-      oc.arc(sx, s.y, Math.max(0.3, s.r), 0, Math.PI * 2);
-      oc.fillStyle = world.starColor;
-      oc.fill();
-    }
-  });
-
-  // Horizon glow
-  const horizonY = snapH * 0.5;
-  const glowGrad = oc.createRadialGradient(snapW / 2, horizonY + 100, 0, snapW / 2, horizonY + 100, snapW * 0.6);
-  if (world.branchType === 'origin') glowGrad.addColorStop(0, 'rgba(60,80,150,0.15)');
-  else if (world.branchType === 'wild1') glowGrad.addColorStop(0, 'rgba(150,50,80,0.2)');
-  else if (world.branchType === 'wild3') glowGrad.addColorStop(0, 'rgba(120,80,30,0.15)');
-  else glowGrad.addColorStop(0, 'rgba(50,150,100,0.15)');
-  glowGrad.addColorStop(1, 'transparent');
-  oc.fillStyle = glowGrad;
-  oc.fillRect(0, 0, snapW, snapH);
-
-  // Parallax mountains
-  const baseY = snapH * 0.55;
-  const mtColor1 = world.branchType === 'origin' ? 'rgba(30,30,60,0.5)' :
-                   world.branchType === 'wild1' ? 'rgba(60,20,40,0.5)' :
-                   world.branchType === 'wild3' ? 'rgba(50,30,15,0.5)' : 'rgba(20,50,40,0.5)';
-  oc.fillStyle = mtColor1;
-  oc.beginPath();
-  oc.moveTo(0, baseY);
-  for (let x = 0; x <= snapW; x += 4) {
-    const wx = x + camX * 0.1;
-    const h = Math.sin(wx * 0.003) * 60 + Math.sin(wx * 0.008) * 30 + Math.cos(wx * 0.001) * 40;
-    oc.lineTo(x, baseY - h - 40);
-  }
-  oc.lineTo(snapW, snapH);
-  oc.lineTo(0, snapH);
-  oc.fill();
-
-  const mtColor2 = world.branchType === 'origin' ? 'rgba(20,20,45,0.6)' :
-                   world.branchType === 'wild1' ? 'rgba(45,15,30,0.6)' :
-                   world.branchType === 'wild3' ? 'rgba(35,22,10,0.6)' : 'rgba(15,35,30,0.6)';
-  oc.fillStyle = mtColor2;
-  oc.beginPath();
-  oc.moveTo(0, baseY + 40);
-  for (let x = 0; x <= snapW; x += 4) {
-    const wx = x + camX * 0.2;
-    const h = Math.sin(wx * 0.005) * 40 + Math.sin(wx * 0.012) * 25;
-    oc.lineTo(x, baseY - h + 20);
-  }
-  oc.lineTo(snapW, snapH);
-  oc.lineTo(0, snapH);
-  oc.fill();
-
-  // Tiles
-  const startX = Math.max(0, Math.floor(camX / TILE));
-  const endX = Math.min(WORLD_W, Math.ceil((camX + snapW) / TILE) + 1);
-  const startY = Math.max(0, Math.floor(camY / TILE));
-  const endY = Math.min(WORLD_H, Math.ceil((camY + snapH) / TILE) + 1);
-  for (let tx = startX; tx < endX; tx++) {
-    for (let ty = startY; ty < endY; ty++) {
+  // Terrain profile — one column per pixel, find surface height
+  const tilesPerCol = Math.ceil(WORLD_W / snapW);
+  for (let px = 0; px < snapW; px++) {
+    const tx = Math.min(WORLD_W - 1, Math.floor(px * WORLD_W / snapW));
+    for (let ty = 0; ty < WORLD_H; ty++) {
       const t = world.tiles[tx][ty];
-      if (t === AIR) continue;
-      const sx = tx * TILE - camX;
-      const sy = ty * TILE - camY;
-      if (t === PORTAL) {
-        oc.fillStyle = 'rgba(68,136,255,0.8)';
-      } else {
+      if (t !== AIR) {
+        const surfaceRatio = ty / WORLD_H;
+        const screenY = Math.floor(surfaceRatio * snapH);
         const colors = TILE_COLORS[t];
-        if (colors) oc.fillStyle = colors[((tx * 7 + ty * 13) % 3)];
-        else oc.fillStyle = '#555';
+        oc.fillStyle = colors ? colors[0] : '#555';
+        oc.fillRect(px, screenY, 1, snapH - screenY);
+        break;
       }
-      oc.fillRect(sx, sy, TILE, TILE);
     }
-  }
-
-  // Player on current branch
-  if (branchId === currentBranch) {
-    const px = player.x - camX;
-    const py = player.y - camY;
-    oc.fillStyle = 'rgba(100,150,255,0.25)';
-    oc.beginPath();
-    oc.arc(px + player.w / 2, py + player.h / 2, 22, 0, Math.PI * 2);
-    oc.fill();
-    oc.fillStyle = '#4466aa';
-    oc.fillRect(px, py + 8, player.w, player.h - 8);
-    oc.fillStyle = '#e8d8cc';
-    oc.beginPath();
-    oc.arc(px + player.w / 2, py + 6, 6, 0, Math.PI * 2);
-    oc.fill();
   }
 }
 
