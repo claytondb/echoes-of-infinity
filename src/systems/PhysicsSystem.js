@@ -30,6 +30,10 @@ export function collideEntity(entity, world) {
   // Apply gravity
   entity.vy += GRAVITY;
 
+  // Track onGround for the whole frame — only set true when hitting ground,
+  // only clear if we never hit ground in any substep this frame
+  let groundedThisFrame = false;
+
   // Substep physics for stable collision
   const dt = 1 / SUBSTEPS;
   for (let sub = 0; sub < SUBSTEPS; sub++) {
@@ -88,7 +92,7 @@ export function collideEntity(entity, world) {
       for (let tx = tileLeft; tx <= tileRight; tx++) {
         if (isSolid(tiles, tx, checkY)) {
           canMoveY = false;
-          entity.onGround = true;
+          groundedThisFrame = true;
           break;
         }
       }
@@ -106,7 +110,7 @@ export function collideEntity(entity, world) {
 
     if (canMoveY) {
       entity.y = nextY;
-      entity.onGround = false;
+      // Don't clear onGround here — let groundedThisFrame decide after all substeps
     } else {
       entity.vy = 0;
     }
@@ -140,7 +144,7 @@ export function collideEntity(entity, world) {
           if (hasGround) {
             // Perform step
             entity.y = testY;
-            entity.onGround = true;
+            groundedThisFrame = true;
             entity.vy = 0;
             entity.visualYOffset = -stepHeight;
             entity.visualXOffset = entity.vx > 0 ? stepHeight : -stepHeight;
@@ -149,6 +153,9 @@ export function collideEntity(entity, world) {
       }
     }
   }
+
+  // Apply grounded state for the whole frame
+  entity.onGround = groundedThisFrame;
 
   // World boundary clamping
   if (entity.x < 0) entity.x = 0;

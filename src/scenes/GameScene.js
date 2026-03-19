@@ -96,9 +96,13 @@ export class GameScene extends Phaser.Scene {
     // Generate origin world
     this.generateWorld('origin');
 
-    // Spawn player at tile position 30
-    this.gameState.player.x = 30 * TILE_SIZE;
-    this.gameState.player.y = 20 * TILE_SIZE;
+    // Spawn player on the actual terrain surface at tile X=30
+    const spawnTileX = 30;
+    const spawnSurface = this.gameState.currentWorld.surfaceHeights
+      ? this.gameState.currentWorld.surfaceHeights[spawnTileX]
+      : 20;
+    this.gameState.player.x = spawnTileX * TILE_SIZE;
+    this.gameState.player.y = (spawnSurface - 2) * TILE_SIZE; // 2 tiles above surface
 
     // Give starter items
     this.gameState.player.inventory[TILES.STONE] = 15;
@@ -687,7 +691,9 @@ export class GameScene extends Phaser.Scene {
         const screenY = y * TILE_SIZE - camY;
 
         const colors = TILE_COLORS[tileId] || ['#444444'];
-        const color = colors[Math.floor(Math.random() * colors.length)];
+        // Use a stable hash from tile coordinates so color doesn't flicker each frame
+        const colorIdx = ((x * 2654435761) ^ (y * 2246822519)) % colors.length;
+        const color = colors[Math.abs(colorIdx)];
 
         if (tileId === TILES.PORTAL) {
           // Pulsing portal

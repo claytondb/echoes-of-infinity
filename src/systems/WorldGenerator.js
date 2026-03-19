@@ -136,5 +136,6 @@ export function generateWorld(branchData) {
     tiles,
     stars,
     branchData,
+    surfaceHeights, // Expose so GameScene can spawn player on the surface
   };
 }
