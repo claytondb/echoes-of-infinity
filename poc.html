@@ -760,6 +760,7 @@ function spawnPlayer(world, preservePosition) {
           }
         }
       }
+      invalidateTileCache();
     }
   } else {
     // First spawn: find surface at position 30
@@ -1195,6 +1196,7 @@ function updatePlayer(world, dt) {
         if (world.tiles[cx][cy] === PLANT) {
           world.tiles[cx][cy] = AIR;
           addItemToInventory(PLANT, 1);
+          invalidateTileCache();
         }
       }
     }
@@ -1412,6 +1414,7 @@ function handleClick(e) {
       if (slotItemId && !TOOL_DURABILITY[slotItemId]) {
         if (removeItemFromInventory(slotItemId, 1) && world.tiles[wx][wy] === AIR) {
           world.tiles[wx][wy] = slotItemId <= 7 ? slotItemId : DIRT;
+          invalidateTileCache();
         }
       }
     } else if (e.button === 2) {
@@ -1419,6 +1422,7 @@ function handleClick(e) {
       if (isSolid(t)) {
         addItemToInventory(t, 1);
         world.tiles[wx][wy] = AIR;
+        invalidateTileCache();
       }
     }
   } else {
@@ -1489,6 +1493,7 @@ function doMining(world, dt) {
   if (miningProgress >= timeToMine) {
     addItemToInventory(t, 1);
     world.tiles[miningTarget.x][miningTarget.y] = AIR;
+    invalidateTileCache();
 
     if (player.equippedTool && TOOL_DURABILITY[player.equippedTool]) {
       player.equippedToolDurability -= 1;
@@ -1904,15 +1909,15 @@ function drawSky(world) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const time = Date.now() / 1000;
-  world.stars.forEach(s => {
+  // Stars — use fillRect instead of arc for performance
+  ctx.fillStyle = world.starColor;
+  for (let i = 0; i < world.stars.length; i++) {
+    const s = world.stars[i];
     const sx = (s.x - camera.x * 0.3) % (canvas.width + 100);
-    const twinkle = 0.5 + 0.5 * Math.sin(time * 2 + s.b * 10);
-    ctx.beginPath();
-    ctx.arc(sx, s.y, s.r * twinkle, 0, Math.PI * 2);
-    ctx.fillStyle = world.starColor;
-    ctx.fill();
-  });
+    if (sx < 0 || sx > canvas.width || s.y > canvas.height * 0.7) continue;
+    const size = s.r;
+    ctx.fillRect(sx, s.y, size, size);
+  }
 
   const horizonY = canvas.height * 0.5;
   const glowGrad = ctx.createRadialGradient(canvas.width / 2, horizonY + 100, 0, canvas.width / 2, horizonY + 100, canvas.width * 0.6);
@@ -1928,53 +1933,88 @@ function drawSky(world) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// ===== TILE MAP CACHING =====
+// Render tiles to an offscreen canvas; only re-render when tiles change
+const tileCache = { canvas: null, ctx: null, branchId: null, dirty: true };
+
+function invalidateTileCache() { tileCache.dirty = true; }
+
+function ensureTileCache(world) {
+  const cacheW = WORLD_W * TILE;
+  const cacheH = WORLD_H * TILE;
+  if (!tileCache.canvas || tileCache.branchId !== currentBranch) {
+    tileCache.canvas = document.createElement('canvas');
+    tileCache.canvas.width = cacheW;
+    tileCache.canvas.height = cacheH;
+    tileCache.ctx = tileCache.canvas.getContext('2d');
+    tileCache.branchId = currentBranch;
+    tileCache.dirty = true;
+  }
+  if (!tileCache.dirty) return;
+  tileCache.dirty = false;
+
+  const tc = tileCache.ctx;
+  tc.clearRect(0, 0, cacheW, cacheH);
+
+  for (let tx = 0; tx < WORLD_W; tx++) {
+    for (let ty = 0; ty < WORLD_H; ty++) {
+      const t = world.tiles[tx][ty];
+      if (t === AIR) continue;
+      const sx = tx * TILE;
+      const sy = ty * TILE;
+
+      if (t === PORTAL) {
+        tc.fillStyle = 'rgba(68,136,255,0.8)';
+        tc.fillRect(sx, sy, TILE, TILE);
+      } else if (t === PLANT) {
+        tc.fillStyle = '#44aa55';
+        tc.fillRect(sx + 6, sy + 4, TILE - 12, TILE - 6);
+        tc.fillStyle = '#55cc66';
+        tc.fillRect(sx + 8, sy + 2, TILE - 16, TILE - 8);
+      } else {
+        const colors = TILE_COLORS[t];
+        if (!colors) continue;
+        tc.fillStyle = colors[((tx * 7 + ty * 13) % 3)];
+        tc.fillRect(sx, sy, TILE, TILE);
+        // Bottom edge shadow
+        tc.fillStyle = 'rgba(0,0,0,0.1)';
+        tc.fillRect(sx, sy + TILE - 2, TILE, 2);
+        // Crystal highlight baked in
+        if (t === CRYSTAL) {
+          tc.fillStyle = 'rgba(200,180,255,0.35)';
+          tc.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+        }
+      }
+    }
+  }
+}
+
 function drawTiles(world) {
+  ensureTileCache(world);
+
+  // Blit the visible portion of the cached tile map
+  const sx = Math.max(0, Math.floor(camera.x));
+  const sy = Math.max(0, Math.floor(camera.y));
+  const sw = Math.min(canvas.width, WORLD_W * TILE - sx);
+  const sh = Math.min(canvas.height, WORLD_H * TILE - sy);
+  if (sw > 0 && sh > 0) {
+    ctx.drawImage(tileCache.canvas, sx, sy, sw, sh, sx - camera.x, sy - camera.y, sw, sh);
+  }
+
+  // Only animate portals (few tiles, not hundreds)
   const startX = Math.max(0, Math.floor(camera.x / TILE));
   const endX = Math.min(WORLD_W, Math.ceil((camera.x + canvas.width) / TILE) + 1);
   const startY = Math.max(0, Math.floor(camera.y / TILE));
   const endY = Math.min(WORLD_H, Math.ceil((camera.y + canvas.height) / TILE) + 1);
-
+  const time = Date.now() / 1000;
   for (let tx = startX; tx < endX; tx++) {
     for (let ty = startY; ty < endY; ty++) {
-      const t = world.tiles[tx][ty];
-      if (t === AIR) continue;
-      const sx = tx * TILE - camera.x;
-      const sy = ty * TILE - camera.y;
-
-      if (t === PORTAL) {
-        const time = Date.now() / 1000;
-        const pulse = 0.7 + 0.3 * Math.sin(time * 3 + ty * 0.5);
-        ctx.fillStyle = `rgba(68,136,255,${pulse * 0.8})`;
-        ctx.fillRect(sx, sy, TILE, TILE);
-        ctx.fillStyle = `rgba(150,200,255,${pulse * 0.3})`;
-        ctx.fillRect(sx - 2, sy, TILE + 4, TILE);
-        for (let p = 0; p < 3; p++) {
-          const py = sy + Math.sin(time * 4 + p * 2) * 8;
-          const px = sx + TILE / 2 + Math.cos(time * 3 + p * 2.5) * 6;
-          ctx.beginPath();
-          ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(200,220,255,${0.5 + 0.5 * Math.sin(time * 5 + p)})`;
-          ctx.fill();
-        }
-      } else if (t === PLANT) {
-        // Draw as a leaf emoji floating above the ground
-        const bob = Math.sin(Date.now() / 500 + tx * 3) * 2;
-        ctx.font = `${TILE - 4}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🌿', sx + TILE / 2, sy + TILE / 2 + bob);
-      } else {
-        const colors = TILE_COLORS[t];
-        const ci = ((tx * 7 + ty * 13) % 3);
-        ctx.fillStyle = colors[ci];
-        ctx.fillRect(sx, sy, TILE, TILE);
-        ctx.fillStyle = 'rgba(0,0,0,0.1)';
-        ctx.fillRect(sx, sy + TILE - 2, TILE, 2);
-        if (t === CRYSTAL) {
-          const shimmer = 0.3 + 0.3 * Math.sin(Date.now() / 400 + tx + ty);
-          ctx.fillStyle = `rgba(200,180,255,${shimmer})`;
-          ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
-        }
+      if (world.tiles[tx][ty] === PORTAL) {
+        const px = tx * TILE - camera.x;
+        const py = ty * TILE - camera.y;
+        const pulse = 0.3 + 0.3 * Math.sin(time * 3 + ty * 0.5);
+        ctx.fillStyle = `rgba(150,200,255,${pulse})`;
+        ctx.fillRect(px - 1, py, TILE + 2, TILE);
       }
     }
   }
@@ -2225,7 +2265,7 @@ function drawPortalLabel(world) {
 const particles = [];
 
 function updateParticles() {
-  if (Math.random() < 0.15) {
+  if (particles.length < 30 && Math.random() < 0.08) {
     particles.push({
       x: camera.x + Math.random() * canvas.width,
       y: camera.y + Math.random() * canvas.height,
@@ -2246,17 +2286,17 @@ function updateParticles() {
 }
 
 function drawParticles(world) {
-  particles.forEach(p => {
+  const baseColor = world.branchType === 'origin' ? [180,200,255] :
+                    world.branchType === 'wild1' ? [255,150,180] : [150,255,200];
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
     const sx = p.x - camera.x;
     const sy = p.y - camera.y;
+    if (sx < -5 || sx > canvas.width + 5 || sy < -5 || sy > canvas.height + 5) continue;
     const alpha = (p.life / p.maxLife) * 0.4;
-    ctx.beginPath();
-    ctx.arc(sx, sy, p.size, 0, Math.PI * 2);
-    if (world.branchType === 'origin') ctx.fillStyle = `rgba(180,200,255,${alpha})`;
-    else if (world.branchType === 'wild1') ctx.fillStyle = `rgba(255,150,180,${alpha})`;
-    else ctx.fillStyle = `rgba(150,255,200,${alpha})`;
-    ctx.fill();
-  });
+    ctx.fillStyle = `rgba(${baseColor[0]},${baseColor[1]},${baseColor[2]},${alpha})`;
+    ctx.fillRect(sx, sy, p.size, p.size);
+  }
 }
 
 function updateHUD() {
