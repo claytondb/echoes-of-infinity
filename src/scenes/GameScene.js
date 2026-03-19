@@ -71,7 +71,27 @@ export class GameScene extends Phaser.Scene {
     this.portalTransition = new PortalTransition();
 
     // Create graphics object for rendering
+    // scrollFactor(0) so the custom cameraController offsets are not double-applied
     this.graphics = this.add.graphics();
+    this.graphics.setScrollFactor(0);
+
+    // ---- Text pool ----
+    // Pre-allocate reusable Text objects to replace g.fillText() calls.
+    // All pool texts use scrollFactor(0) so they stay in screen space.
+    this._textPool = [];
+    this._textPoolUsed = 0;
+    const TEXT_POOL_SIZE = 60;
+    for (let i = 0; i < TEXT_POOL_SIZE; i++) {
+      const t = this.add.text(0, 0, '', {
+        fontSize: '13px',
+        color: '#ffffff',
+        fontFamily: 'Courier New',
+      });
+      t.setScrollFactor(0);
+      t.setDepth(10);
+      t.setVisible(false);
+      this._textPool.push(t);
+    }
 
     // Generate origin world
     this.generateWorld('origin');
@@ -112,6 +132,20 @@ export class GameScene extends Phaser.Scene {
     // Initialize HUD
     updateHUD(this.gameState);
     updateGauntletUI(this.gameState);
+  }
+
+  /**
+   * Grab a text object from the pool and configure it.
+   * Returns null if the pool is exhausted.
+   */
+  _getPoolText(x, y, text, color = '#ffffff', fontSize = '13px') {
+    if (this._textPoolUsed >= this._textPool.length) return null;
+    const t = this._textPool[this._textPoolUsed++];
+    t.setPosition(x, y);
+    t.setText(text);
+    t.setStyle({ color, fontSize, fontFamily: 'Courier New' });
+    t.setVisible(true);
+    return t;
   }
 
   update(time, delta) {
@@ -187,9 +221,8 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.height
     );
 
-    // Apply camera
-    this.cameras.main.setScroll(this.cameraController.x, this.cameraController.y);
-    this.cameras.main.setZoom(this.cameraController.zoom);
+    // NOTE: We do NOT call setScroll/setZoom here because the graphics and text objects
+    // all use setScrollFactor(0) and render in screen-space via manual offset math.
 
     // Check portal interaction (E key)
     if (this.gameState.keys['KeyE']) {
@@ -277,12 +310,14 @@ export class GameScene extends Phaser.Scene {
     if (key === 'KeyB') {
       this.gameState.buildMode = !this.gameState.buildMode;
       const indicator = document.getElementById('build-mode-indicator');
-      if (this.gameState.buildMode) {
-        indicator.classList.add('active');
-        showMessage('Build mode ON');
-      } else {
-        indicator.classList.remove('active');
-        showMessage('Build mode OFF');
+      if (indicator) {
+        if (this.gameState.buildMode) {
+          indicator.classList.add('active');
+          showMessage('Build mode ON');
+        } else {
+          indicator.classList.remove('active');
+          showMessage('Build mode OFF');
+        }
       }
     } else if (key === 'KeyI' || key === 'Tab') {
       document.getElementById('inventory-modal').classList.add('active');
@@ -334,10 +369,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleLeftClick(screenX, screenY) {
-    // Convert to world coordinates
-    const worldPos = this.cameras.main.getWorldPoint(screenX, screenY);
-    const worldX = worldPos.x;
-    const worldY = worldPos.y;
+    // Convert screen coordinates to world coordinates.
+    // Graphics use scrollFactor(0) so world = screen + cameraController offset.
+    const worldX = screenX + this.cameraController.x;
+    const worldY = screenY + this.cameraController.y;
 
     if (this.gameState.buildMode) {
       // Place block
@@ -361,10 +396,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   handleRightClick(screenX, screenY) {
-    // Convert to world coordinates
-    const worldPos = this.cameras.main.getWorldPoint(screenX, screenY);
-    const worldX = worldPos.x;
-    const worldY = worldPos.y;
+    // Convert screen coordinates to world coordinates.
+    // Graphics use scrollFactor(0) so world = screen + cameraController offset.
+    const worldX = screenX + this.cameraController.x;
+    const worldY = screenY + this.cameraController.y;
 
     if (this.gameState.buildMode) {
       // Break block
@@ -523,6 +558,10 @@ export class GameScene extends Phaser.Scene {
     const g = this.graphics;
     g.clear();
 
+    // Reset text pool each frame — hide all, then hand out as needed
+    this._textPoolUsed = 0;
+    this._textPool.forEach((t) => t.setVisible(false));
+
     const world = this.gameState.currentWorld;
     const branch = this.gameState.currentBranch;
     const player = this.gameState.player;
@@ -536,11 +575,11 @@ export class GameScene extends Phaser.Scene {
 
     // ===== SKY GRADIENT =====
     g.fillStyle(0x0a0a2e);
-    g.fillRect(camX, camY, width / zoom, height / zoom);
+    g.fillRect(0, 0, width, height);
 
-    // Sky gradient
+    // Sky gradient (5 horizontal bands)
     for (let i = 0; i < 5; i++) {
-      const y = camY + (i * (height / zoom)) / 5;
+      const y = (i * height) / 5;
       const t = i / 5;
       g.fillStyle(Phaser.Display.Color.Interpolate.ColorWithColor(
         Phaser.Display.Color.HexStringToColor(branch.skyTop),
@@ -548,19 +587,19 @@ export class GameScene extends Phaser.Scene {
         1,
         t
       ).color);
-      g.fillRect(camX, y, width / zoom, (height / zoom) / 5);
+      g.fillRect(0, y, width, height / 5);
     }
 
     // ===== STARS =====
     if (world.stars) {
-      const starColor = Phaser.Display.Color.HexStringToColor(branch.starColor || 'rgba(200,200,255,0.6)').color;
+      const starColor = Phaser.Display.Color.HexStringToColor(branch.starColor || '#c8c8ff').color;
       g.fillStyle(starColor);
 
       world.stars.forEach((star) => {
         const screenX = star.x - camX;
         const screenY = star.y - camY;
 
-        if (screenX > 0 && screenX < width / zoom && screenY > 0 && screenY < height / zoom) {
+        if (screenX > 0 && screenX < width && screenY > 0 && screenY < height) {
           const radius = star.brightness * 1.5;
           g.fillCircle(screenX, screenY, radius);
         }
@@ -607,34 +646,35 @@ export class GameScene extends Phaser.Scene {
   }
 
   renderMountains(g, branch, camX, camY, width, height, zoom) {
-    const mountainColor1 = branch.mountainColor1 || 'rgba(30,30,60,0.5)';
-    const mountainColor2 = branch.mountainColor2 || 'rgba(20,20,45,0.6)';
+    const mountainColor1 = branch.mountainColor1 || '#1e1e3c';
+    const mountainColor2 = branch.mountainColor2 || '#14142d';
 
     const parallaxOffset1 = (camX * 0.3) % (WORLD_WIDTH * TILE_SIZE);
     const parallaxOffset2 = (camX * 0.5) % (WORLD_WIDTH * TILE_SIZE);
 
+    // FIX: fillTriangleShape does not exist in Phaser 3. Use fillTriangle(x1,y1,x2,y2,x3,y3).
     g.fillStyle(Phaser.Display.Color.HexStringToColor(mountainColor1).color);
-    g.fillTriangleShape([
-      { x: -parallaxOffset1, y: height / 3 },
-      { x: -parallaxOffset1 + 300, y: height / 2 },
-      { x: -parallaxOffset1 - 300, y: height / 2 },
-    ]);
+    g.fillTriangle(
+      -parallaxOffset1,          height / 3,
+      -parallaxOffset1 + 300,    height / 2,
+      -parallaxOffset1 - 300,    height / 2
+    );
 
     g.fillStyle(Phaser.Display.Color.HexStringToColor(mountainColor2).color);
-    g.fillTriangleShape([
-      { x: 200 - parallaxOffset2, y: height / 2.5 },
-      { x: 200 - parallaxOffset2 + 350, y: height / 1.8 },
-      { x: 200 - parallaxOffset2 - 350, y: height / 1.8 },
-    ]);
+    g.fillTriangle(
+      200 - parallaxOffset2,         height / 2.5,
+      200 - parallaxOffset2 + 350,   height / 1.8,
+      200 - parallaxOffset2 - 350,   height / 1.8
+    );
   }
 
   renderTiles(g, world, branch, camX, camY, width, height, zoom) {
     const tiles = world.tiles;
 
     const startTileX = Math.max(0, Math.floor(camX / TILE_SIZE));
-    const endTileX = Math.min(tiles[0].length, Math.ceil((camX + width / zoom) / TILE_SIZE) + 1);
+    const endTileX = Math.min(tiles[0].length, Math.ceil((camX + width) / TILE_SIZE) + 1);
     const startTileY = Math.max(0, Math.floor(camY / TILE_SIZE));
-    const endTileY = Math.min(tiles.length, Math.ceil((camY + height / zoom) / TILE_SIZE) + 1);
+    const endTileY = Math.min(tiles.length, Math.ceil((camY + height) / TILE_SIZE) + 1);
 
     // Render tiles
     for (let y = startTileY; y < endTileY; y++) {
@@ -652,23 +692,24 @@ export class GameScene extends Phaser.Scene {
         if (tileId === TILES.PORTAL) {
           // Pulsing portal
           const pulse = (Math.sin(Date.now() / 500) + 1) / 2;
+          // FIX: g.globalAlpha does not exist in Phaser 3 — use g.setAlpha()
+          g.setAlpha(0.5 + pulse * 0.5);
           g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color);
-          g.globalAlpha = 0.5 + pulse * 0.5;
           g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          g.globalAlpha = 1;
+          g.setAlpha(1);
 
           // Portal glow
           g.lineStyle(2, 0x4488ff, 1);
           g.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
         } else if (tileId === TILES.PLANT) {
-          // Plant (just show emoji)
+          // Plant tile — draw colored rect; use text pool for the emoji overlay
+          // FIX: removed g.save()/g.restore() (don't exist) and g.fillText() (doesn't exist).
           g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color);
           g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
-          g.save();
-          g.fillText('🌿', screenX + TILE_SIZE / 2, screenY + TILE_SIZE / 2);
-          g.restore();
+          // Emoji label via text pool (origin at top-left of tile)
+          this._getPoolText(screenX + 2, screenY, '🌿', '#ffffff', '12px');
         } else if (tileId === TILES.LEAF) {
-          // Leaf with emoji
+          // Leaf
           g.fillStyle(Phaser.Display.Color.HexStringToColor(color).color);
           g.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
         } else {
@@ -683,9 +724,12 @@ export class GameScene extends Phaser.Scene {
 
     // Render build cursor if in build mode
     if (this.gameState.buildMode) {
-      const worldPos = this.cameras.main.getWorldPoint(this.gameState.mouseState.x, this.gameState.mouseState.y);
-      const tileX = Math.floor(worldPos.x / TILE_SIZE);
-      const tileY = Math.floor(worldPos.y / TILE_SIZE);
+      // FIX: don't use getWorldPoint — compute directly from cameraController offsets.
+      // Graphics are in screen-space (scrollFactor 0), so world = screen + camOffset.
+      const mouseWorldX = this.gameState.mouseState.x + camX;
+      const mouseWorldY = this.gameState.mouseState.y + camY;
+      const tileX = Math.floor(mouseWorldX / TILE_SIZE);
+      const tileY = Math.floor(mouseWorldY / TILE_SIZE);
 
       if (tileX >= startTileX && tileX < endTileX && tileY >= startTileY && tileY < endTileY) {
         const screenX = tileX * TILE_SIZE - camX;
@@ -762,8 +806,9 @@ export class GameScene extends Phaser.Scene {
       const x = item.x - camX;
       const y = item.y - camY - Math.sin(Date.now() / 500 + item.bobPhase) * 3;
 
+      // FIX: g.fillText does not exist — use text pool instead
       const icon = ITEM_ICONS[item.itemId] || '?';
-      g.fillText(icon, x, y);
+      this._getPoolText(x, y, icon, '#ffffff', '14px');
     });
   }
 
@@ -781,8 +826,8 @@ export class GameScene extends Phaser.Scene {
           const screenX = x * TILE_SIZE - camX + TILE_SIZE / 2;
           const screenY = y * TILE_SIZE - camY - 15;
 
-          g.fillStyle(0x4488ff);
-          g.fillText('E to travel', screenX - 30, screenY);
+          // FIX: g.fillText does not exist — use text pool instead
+          this._getPoolText(screenX - 30, screenY, 'E to travel', '#4488ff', '11px');
         }
       }
     }
@@ -794,15 +839,17 @@ export class GameScene extends Phaser.Scene {
 
     if (phase === 'sliceView') {
       // Dark overlay
+      // FIX: g.globalAlpha does not exist — use g.setAlpha()
+      g.setAlpha(0.7);
       g.fillStyle(0x000000);
-      g.globalAlpha = 0.7;
-      g.fillRect(camX, camY, width, height);
-      g.globalAlpha = 1;
+      g.fillRect(0, 0, width, height);
+      g.setAlpha(1);
 
-      // Show branch name
+      // Show branch name — FIX: g.fillText does not exist — use text pool
       const branch = this.portalTransition.getTargetBranch();
-      g.fillStyle(0xaa88ff);
-      g.fillText(branch.name, camX + width / 2 - 50, camY + height / 2);
+      if (branch) {
+        this._getPoolText(width / 2 - 60, height / 2, branch.name, '#aa88ff', '20px');
+      }
     }
   }
 
@@ -819,9 +866,12 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Version badge click
-    document.getElementById('version-badge').addEventListener('click', () => {
-      document.getElementById('changelog-modal').classList.add('active');
-    });
+    const versionBadge = document.getElementById('version-badge');
+    if (versionBadge) {
+      versionBadge.addEventListener('click', () => {
+        document.getElementById('changelog-modal').classList.add('active');
+      });
+    }
 
     // Gauntlet slot clicks
     document.querySelectorAll('.stone-slot').forEach((slot) => {
@@ -897,10 +947,12 @@ export class GameScene extends Phaser.Scene {
             this.gameState.player.y = 50;
             this.gameState.player.hp = this.gameState.player.maxHp;
           }, 1500);
-        } else if (this.gameState.turnBattle.echo.hp <= 0) {
+        } else if (this.gameState.turnBattle.echo && this.gameState.turnBattle.echo.hp <= 0) {
           showMessage('Victory!');
           this.handleEchoDefeat();
-          this.gameState.echo.hp = 0; // Mark echo as dead
+          if (this.gameState.echo) {
+            this.gameState.echo.hp = 0; // Mark echo as dead
+          }
         }
 
         this.gameState.turnBattle = null;
@@ -946,6 +998,7 @@ export class GameScene extends Phaser.Scene {
 
     branches.forEach((branch, index) => {
       const pos = positions[index];
+      if (!pos) return;
       const isCurrent = branch.id === this.gameState.currentBranch.id;
 
       // Draw circle

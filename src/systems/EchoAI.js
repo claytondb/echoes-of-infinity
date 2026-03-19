@@ -4,6 +4,7 @@
 
 import { collideEntity } from './PhysicsSystem.js';
 import { TILES } from '../data/TileTypes.js';
+import { TILE_SIZE } from '../data/GameConfig.js';
 
 export class EchoAI {
   constructor() {
@@ -43,8 +44,8 @@ export class EchoAI {
 
     return {
       id: `echo_${this.echoCounter}`,
-      x: spawnX * 24 + 4,
-      y: spawnY * 24,
+      x: spawnX * TILE_SIZE + 4,
+      y: spawnY * TILE_SIZE,
       vx: 0,
       vy: 0,
       w: 16,

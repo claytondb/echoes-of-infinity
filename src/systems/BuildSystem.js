@@ -83,7 +83,7 @@ export class BuildSystem {
    * Break a block and add to inventory
    */
   breakBlock(tiles, tileX, tileY, inventory) {
-    const tileId = tiles[tileX][tileY];
+    const tileId = tiles[tileY][tileX]; // FIX: was [tileX][tileY] — array is [row][col] i.e. [y][x]
     const tileProps = TILE_PROPERTIES[tileId];
 
     if (tileProps && tileProps.miningTime === 0) {

@@ -24,7 +24,7 @@ function isSolid(tiles, x, y) {
  */
 export function collideEntity(entity, world) {
   const tiles = world.tiles;
-  const TILE_PX = 24; // pixels per tile
+  const TILE_PX = TILE_SIZE; // pixels per tile (use GameConfig constant)
   const SUBSTEPS = 4;
 
   // Apply gravity

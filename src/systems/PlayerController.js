@@ -3,7 +3,7 @@
  */
 
 import { TILES } from '../data/TileTypes.js';
-import { MOVE_SPEED } from '../data/GameConfig.js';
+import { MOVE_SPEED, TILE_SIZE } from '../data/GameConfig.js';
 
 export class PlayerController {
   constructor(gameState) {
@@ -122,8 +122,8 @@ export class PlayerController {
     }
 
     // Auto-pickup plants
-    const tileX = Math.floor(player.x / 24);
-    const tileY = Math.floor(player.y / 24);
+    const tileX = Math.floor(player.x / TILE_SIZE);
+    const tileY = Math.floor(player.y / TILE_SIZE);
     if (
       tileX >= 0 &&
       tileX < tiles[0].length &&
