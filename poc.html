@@ -2327,13 +2327,19 @@ function closeMultiverseView() {
   multiverseViewActive = false;
   gamePaused = false;
   document.getElementById('ui-overlay').style.opacity = '1';
+  // Free snapshot memory
+  for (const key in mvSnapshots) {
+    mvSnapshots[key].width = 0;
+    mvSnapshots[key].height = 0;
+    delete mvSnapshots[key];
+  }
 }
 
 function renderWorldSnapshot(branchId) {
   const world = getWorld(branchId);
-  // Render at the actual screen size so it looks like the real game
-  const snapW = canvas.width;
-  const snapH = canvas.height;
+  // Render at half resolution — plenty for the thin slice view
+  const snapW = Math.floor(canvas.width / 2);
+  const snapH = Math.floor(canvas.height / 2);
   let offCanvas = mvSnapshots[branchId];
   if (!offCanvas || offCanvas.width !== snapW || offCanvas.height !== snapH) {
     offCanvas = document.createElement('canvas');
@@ -2500,9 +2506,11 @@ function handlePortalTransition() {
   } else if (portalTransition.phase === 'sliceView') {
     // Phase 2: Show multiverse slice view (60-120 frames / 0-60 frame window)
     if (portalTransition.timer <= 60) {
-      // Render snapshots for animation
+      // Render snapshots once at the start of this phase
       const visible = getVisibleBranches();
-      visible.forEach(branch => renderWorldSnapshot(branch.id));
+      if (portalTransition.timer <= 1) {
+        visible.forEach(branch => renderWorldSnapshot(branch.id));
+      }
 
       // Highlight target branch
       const targetIdx = visible.findIndex(b => b.id === portalTransition.targetBranch);
@@ -2906,9 +2914,7 @@ function gameLoop() {
   }
 
   if (multiverseViewActive) {
-    // Re-render snapshot for current branch each frame so it's live
-    renderWorldSnapshot(currentBranch);
-    // Draw the multiverse cover-flow view
+    // Snapshots are rendered once in openMultiverseView — no per-frame re-rendering
     drawMultiverseView();
     requestAnimationFrame(gameLoop);
     return;
