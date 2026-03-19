@@ -1530,7 +1530,7 @@ function travelToBranch() {
 
   // Start portal transition animation
   portalTransition = {
-    phase: 'zoomOut',
+    phase: 'fadeOut',
     timer: 0,
     targetBranch: targetBranch
   };
@@ -2469,108 +2469,71 @@ function handlePortalTransition() {
   const W = canvas.width;
   const H = canvas.height;
   portalTransition.timer++;
-  const totalFrames = 180;
-  const progress = portalTransition.timer / totalFrames;
 
-  if (portalTransition.phase === 'zoomOut') {
-    // Phase 1: Zoom out (0-60 frames)
-    if (portalTransition.timer <= 60) {
-      const phaseProgress = portalTransition.timer / 60;
-      camera.zoom = 1 - phaseProgress * 0.7; // 1.0 to 0.3
-
-      // Vignette effect
-      ctx.save();
-      ctx.fillStyle = '#030210';
-      ctx.fillRect(0, 0, W, H);
-
-      // Render current world faded
+  if (portalTransition.phase === 'fadeOut') {
+    // Phase 1: Fade to black (30 frames)
+    if (portalTransition.timer <= 30) {
+      const t = portalTransition.timer / 30;
+      // Draw current world normally, then overlay fade
       const world = getWorld(currentBranch);
-      drawSky(world);
-      drawParallaxMountains(world);
-      drawTiles(world);
-      drawCharacter(player, characterTraits.player);
-      if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
-
-      // Vignette darkening
-      const vignetteGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H));
-      vignetteGrad.addColorStop(0, 'transparent');
-      vignetteGrad.addColorStop(1, `rgba(3,2,16,${phaseProgress * 0.8})`);
-      ctx.fillStyle = vignetteGrad;
-      ctx.fillRect(0, 0, W, H);
-      ctx.restore();
-    } else {
-      // Transition to slice view
-      portalTransition.phase = 'sliceView';
-      portalTransition.timer = 0;
-    }
-  } else if (portalTransition.phase === 'sliceView') {
-    // Phase 2: Show multiverse slice view (60-120 frames / 0-60 frame window)
-    if (portalTransition.timer <= 60) {
-      // Render snapshots once at the start of this phase
-      const visible = getVisibleBranches();
-      if (portalTransition.timer <= 1) {
-        visible.forEach(branch => renderWorldSnapshot(branch.id));
-      }
-
-      // Highlight target branch
-      const targetIdx = visible.findIndex(b => b.id === portalTransition.targetBranch);
-      if (targetIdx >= 0) {
-        mvSelectedIndex = targetIdx;
-      }
-
-      // Smooth scroll animation
-      mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.15;
-      mvTransition = Math.min(1, mvTransition + 0.05);
-
-      drawMultiverseView();
-    } else {
-      // Actually perform the branch change
-      currentBranch = portalTransition.targetBranch;
-      const world = getWorld(currentBranch);
-      spawnPlayer(world, true);
-
-      if (currentBranch === 'origin') {
-        echo = null;
-      } else {
-        spawnEcho(world);
-      }
-
-      camera.zoom = 0.3;
-      camera.x = player.x - W / 2;
-      camera.y = player.y - H / 2;
-
-      portalTransition.phase = 'zoomIn';
-      portalTransition.timer = 0;
-    }
-  } else if (portalTransition.phase === 'zoomIn') {
-    // Phase 3: Zoom in (120-180 frames / 0-60 frame window)
-    if (portalTransition.timer <= 60) {
-      const phaseProgress = portalTransition.timer / 60;
-      camera.zoom = 0.3 + phaseProgress * 0.7; // 0.3 to 1.0
-
-      const world = getWorld(currentBranch);
-
       ctx.save();
       if (camera.zoom !== 1) {
         ctx.translate(W / 2, H / 2);
         ctx.scale(camera.zoom, camera.zoom);
         ctx.translate(-W / 2, -H / 2);
       }
-
+      drawSky(world);
+      drawParallaxMountains(world);
+      drawTiles(world);
+      drawCharacter(player, characterTraits.player);
+      ctx.restore();
+      // Fade overlay
+      ctx.fillStyle = `rgba(3,2,16,${t})`;
+      ctx.fillRect(0, 0, W, H);
+      // Branch name text
+      if (t > 0.5) {
+        ctx.globalAlpha = (t - 0.5) * 2;
+        ctx.fillStyle = '#b8b0ff';
+        ctx.font = '24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(getBranchName(portalTransition.targetBranch), W / 2, H / 2);
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      // Switch branch
+      currentBranch = portalTransition.targetBranch;
+      const world = getWorld(currentBranch);
+      spawnPlayer(world, true);
+      if (currentBranch === 'origin') { echo = null; }
+      else { spawnEcho(world); }
+      camera.x = player.x - W / 2;
+      camera.y = player.y - H / 2;
+      portalTransition.phase = 'fadeIn';
+      portalTransition.timer = 0;
+    }
+  } else if (portalTransition.phase === 'fadeIn') {
+    // Phase 2: Fade in from black (30 frames)
+    if (portalTransition.timer <= 30) {
+      const t = 1 - portalTransition.timer / 30;
+      const world = getWorld(currentBranch);
+      ctx.save();
+      if (camera.zoom !== 1) {
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-W / 2, -H / 2);
+      }
       drawSky(world);
       drawParallaxMountains(world);
       drawTiles(world);
       drawCharacter(player, characterTraits.player);
       if (echo && echo.hp > 0) drawCharacter(echo, characterTraits.echoTraits[echo.id], true);
-
       ctx.restore();
+      ctx.fillStyle = `rgba(3,2,16,${t})`;
+      ctx.fillRect(0, 0, W, H);
     } else {
-      // Transition complete
       portalTransition = null;
       gamePaused = false;
       camera.zoom = 1;
-      mvTransition = 0;
-
       if (currentBranch === 'origin') {
         showMsg("Returning to Origin Branch", 120);
       } else {
@@ -2584,29 +2547,15 @@ function handlePortalTransition() {
 }
 
 function drawMultiverseView() {
-  mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.1;
-  mvTransition = Math.min(1, mvTransition + 0.035);
+  mvScrollOffset += (mvSelectedIndex - mvScrollOffset) * 0.12;
+  mvTransition = Math.min(1, mvTransition + 0.06);
 
   const W = canvas.width;
   const H = canvas.height;
-  const time = Date.now() / 1000;
 
   // Black void
   ctx.fillStyle = '#030210';
   ctx.fillRect(0, 0, W, H);
-
-  // Faint void particles
-  ctx.save();
-  ctx.globalAlpha = 0.25 * mvTransition;
-  for (let i = 0; i < 40; i++) {
-    const px = (Math.sin(time * 0.12 + i * 2.3) * 0.5 + 0.5) * W;
-    const py = (Math.cos(time * 0.09 + i * 1.8) * 0.5 + 0.5) * H;
-    ctx.beginPath();
-    ctx.arc(px, py, 0.5 + Math.abs(Math.sin(time * 0.5 + i)) * 0.8, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(100,80,180,${0.15 + 0.1 * Math.abs(Math.sin(time + i))})`;
-    ctx.fill();
-  }
-  ctx.restore();
 
   // ---- EDGE-ON SLICES ----
   // Each world is a full-screen-sized plane. We view them from the side.
@@ -2675,31 +2624,13 @@ function drawMultiverseView() {
     const isCurrent = branch.id === currentBranch;
     const distFromSel = Math.abs(s.offset);
 
-    // Perspective: the far edge (side away from camera) is slightly shorter
-    // This creates the 3D "turned page" look
-    const perspectiveAmount = Math.sin(s.angleRad) * 0.08;
-    const nearEdgeShrink = 0;
-    const farEdgeShrink = perspectiveAmount;
-
-    // Which side is the "far" side depends on which side of selected we are
-    const farIsRight = s.offset >= 0;
-
     const x = s.startX;
     const sw = s.sliceW;
     const sliceH = H * 0.85;
     const topY = (H - sliceH) / 2;
 
-    // Four corners with perspective shrink
-    const leftShrink = farIsRight ? nearEdgeShrink : farEdgeShrink;
-    const rightShrink = farIsRight ? farEdgeShrink : nearEdgeShrink;
-
-    const tl = { x: x, y: topY + sliceH * leftShrink };
-    const tr = { x: x + sw, y: topY + sliceH * rightShrink };
-    const br = { x: x + sw, y: topY + sliceH * (1 - rightShrink) };
-    const bl = { x: x, y: topY + sliceH * (1 - leftShrink) };
-
     // Skip if fully off-screen
-    if (tr.x < -10 || tl.x > W + 10) continue;
+    if (x + sw < -10 || x > W + 10) continue;
 
     // Store hitbox for click detection
     mvSliceHitboxes.push({ i: s.i, x: x, w: sw, y: topY, h: sliceH, offset: s.offset });
@@ -2709,142 +2640,55 @@ function drawMultiverseView() {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    // Clip to trapezoid
-    ctx.beginPath();
-    ctx.moveTo(tl.x, tl.y);
-    ctx.lineTo(tr.x, tr.y);
-    ctx.lineTo(br.x, br.y);
-    ctx.lineTo(bl.x, bl.y);
-    ctx.closePath();
-
     if (snap && branch.discovered) {
-      ctx.save();
-      ctx.clip();
-      // Draw the full-resolution world snapshot squeezed into this strip
-      ctx.drawImage(snap, tl.x, topY, sw, sliceH);
-
-      // Ghost outline of player position on non-origin branches
-      if (branch.id !== 'origin' && branch.id !== currentBranch) {
-        // Show where the origin player would be in this world's view
-        // The snapshot camera is centered on the world center, so we map player pos relative to that
-        const snapCanvas = snap;
-        const world = getWorld(branch.id);
-        let worldCamX = WORLD_W * TILE / 2 - snapCanvas.width / 2;
-        let worldCamY = 20 * TILE;
-        const midX = Math.floor(WORLD_W / 2);
-        for (let y = 0; y < WORLD_H; y++) {
-          if (world.tiles[midX][y] !== AIR) { worldCamY = y * TILE - snapCanvas.height / 3; break; }
-        }
-        // Player position relative to this branch's camera
-        const ghostRelX = (player.x - worldCamX) / snapCanvas.width;
-        const ghostRelY = (player.y - worldCamY) / snapCanvas.height;
-        const ghostScreenX = tl.x + ghostRelX * sw;
-        const ghostScreenY = topY + ghostRelY * sliceH;
-        // Draw a pulsing outline silhouette
-        const pulse = 0.4 + 0.3 * Math.abs(Math.sin(time * 2));
-        ctx.strokeStyle = `rgba(100,180,255,${pulse})`;
-        ctx.lineWidth = 1.5;
-        // Head outline
-        const headR = Math.max(1.5, 4 * (sw / W));
-        const bodyW = Math.max(2, 10 * (sw / W));
-        const bodyH = Math.max(3, 18 * (sw / W));
-        ctx.beginPath();
-        ctx.arc(ghostScreenX, ghostScreenY - bodyH * 0.3, headR, 0, Math.PI * 2);
-        ctx.stroke();
-        // Body outline
-        ctx.strokeRect(ghostScreenX - bodyW / 2, ghostScreenY - bodyH * 0.1, bodyW, bodyH);
-        // Label
-        if (sw > 30) {
-          ctx.fillStyle = `rgba(100,180,255,${pulse * 0.7})`;
-          ctx.font = `${Math.max(7, 10 * (sw / W))}px sans-serif`;
-          ctx.textAlign = 'center';
-          ctx.fillText('YOU', ghostScreenX, ghostScreenY - bodyH * 0.5);
-        }
-      }
+      // Draw snapshot as a simple rectangle — no clipping, no perspective warp
+      ctx.drawImage(snap, x, topY, sw, sliceH);
 
       // Darken distant slices
       if (distFromSel > 0.5) {
-        ctx.fillStyle = `rgba(3,2,10,${Math.min(0.55, distFromSel * 0.12)})`;
-        ctx.fillRect(tl.x - 1, topY - 1, sw + 2, sliceH + 2);
+        ctx.fillStyle = `rgba(3,2,10,${Math.min(0.5, distFromSel * 0.12)})`;
+        ctx.fillRect(x, topY, sw, sliceH);
       }
-      ctx.restore();
     } else {
       // Unknown branch: dark slab
       ctx.fillStyle = '#0a0818';
-      ctx.fill();
-      if (sw > 8) {
-        ctx.fillStyle = `rgba(80,70,130,${0.2 + 0.1 * Math.abs(Math.sin(time + s.i))})`;
-        ctx.font = `bold ${Math.min(sw * 0.6, 40)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('?', x + sw / 2, H / 2);
-      }
+      ctx.fillRect(x, topY, sw, sliceH);
     }
 
-    // Border
-    ctx.beginPath();
-    ctx.moveTo(tl.x, tl.y);
-    ctx.lineTo(tr.x, tr.y);
-    ctx.lineTo(br.x, br.y);
-    ctx.lineTo(bl.x, bl.y);
-    ctx.closePath();
-
+    // Border — simple rect stroke, no clip paths
     if (isSelected) {
-      ctx.shadowColor = branch.accent;
-      ctx.shadowBlur = 20;
       ctx.strokeStyle = branch.accent;
       ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
+      ctx.strokeRect(x, topY, sw, sliceH);
     } else {
-      ctx.strokeStyle = `rgba(120,110,180,${0.1 + alpha * 0.15})`;
+      ctx.strokeStyle = `rgba(120,110,180,${0.15 + alpha * 0.1})`;
       ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.strokeRect(x, topY, sw, sliceH);
     }
 
     if (isCurrent && !isSelected) {
       ctx.setLineDash([6, 4]);
       ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 1.5;
-      ctx.stroke();
+      ctx.strokeRect(x, topY, sw, sliceH);
       ctx.setLineDash([]);
     }
 
-    // 3D edge strip: a thin dark band on the "thickness" side of the slice
-    const edgeThickness = Math.max(2, 5 - distFromSel * 0.5);
-    if (distFromSel > 0.15 || true) {
-      const edgeOnRight = s.offset < 0;
-      ctx.fillStyle = `rgba(25,20,45,${alpha * 0.8})`;
-      if (edgeOnRight) {
-        ctx.beginPath();
-        ctx.moveTo(tr.x, tr.y);
-        ctx.lineTo(tr.x + edgeThickness, tr.y + 3);
-        ctx.lineTo(br.x + edgeThickness, br.y - 3);
-        ctx.lineTo(br.x, br.y);
-        ctx.closePath();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(tl.x, tl.y);
-        ctx.lineTo(tl.x - edgeThickness, tl.y + 3);
-        ctx.lineTo(bl.x - edgeThickness, bl.y - 3);
-        ctx.lineTo(bl.x, bl.y);
-        ctx.closePath();
-      }
-      ctx.fill();
-      ctx.strokeStyle = `rgba(80,70,130,${alpha * 0.3})`;
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-    }
+    // Thin edge strip for 3D feel
+    const edgeW = Math.max(2, 4 - distFromSel * 0.5);
+    const edgeSide = s.offset < 0 ? x + sw : x - edgeW;
+    ctx.fillStyle = `rgba(25,20,45,${alpha * 0.7})`;
+    ctx.fillRect(edgeSide, topY, edgeW, sliceH);
 
     ctx.restore();
 
     // Label below with defeated echo indicator
+    const labelY = topY + sliceH + 16;
     if (alpha > 0.15 && sw > 3) {
       ctx.save();
       const labelAlpha = isSelected ? alpha : alpha * Math.max(0.2, 1 - distFromSel * 0.3);
       ctx.globalAlpha = labelAlpha;
       const labelX = x + sw / 2;
-      const labelY = bl.y + 16;
       ctx.textAlign = 'center';
       if (isSelected) {
         ctx.font = 'bold 15px sans-serif';
